@@ -250,7 +250,7 @@ func GenerateRandomKey(length int) (string, error) {
 
 func GenerateKey() (string, error) {
 	//rand.Seed(time.Now().UnixNano())
-	return GenerateRandomCharsKey(48)
+	return GenerateRandomCharsKey(KeyLength)
 }
 
 func GetRandomInt(max int) int {

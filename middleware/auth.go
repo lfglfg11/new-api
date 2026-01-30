@@ -235,6 +235,10 @@ func TokenAuth() func(c *gin.Context) {
 			parts = strings.Split(key, "-")
 			key = parts[0]
 		}
+		// 兼容迁移过来的旧 key，如果 key 长度超过本项目支持的长度，则截取
+		if len(key) > common.KeyLength {
+			key = key[:common.KeyLength]
+		}
 		token, err := model.ValidateUserToken(key)
 		if token != nil {
 			id := c.GetInt("id")
