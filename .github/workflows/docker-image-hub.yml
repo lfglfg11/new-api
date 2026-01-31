@@ -66,7 +66,7 @@ jobs:
           tags: |
             ghcr.io/${{ env.GHCR_REPOSITORY }}:hub-${{ matrix.arch }}
             ghcr.io/${{ env.GHCR_REPOSITORY }}:${{ steps.version.outputs.value }}-${{ matrix.arch }}
-            ghcr.io/${{ env.GHCR_REPOSITORY }}:hub  # 多架构标签在下一步创建
+            ghcr.io/${{ env.GHCR_REPOSITORY }}:hub
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
