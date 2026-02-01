@@ -227,14 +227,8 @@ func TokenAuth() func(c *gin.Context) {
 			if strings.HasPrefix(key, "Bearer ") || strings.HasPrefix(key, "bearer ") {
 				key = strings.TrimSpace(key[7:])
 			}
-			key = strings.TrimPrefix(key, "sk-")
-			parts = strings.Split(key, "-")
-			key = parts[0]
-		} else {
-			key = strings.TrimPrefix(key, "sk-")
-			parts = strings.Split(key, "-")
-			key = parts[0]
 		}
+		key, parts = splitTokenKeyParts(key)
 		// 兼容迁移过来的旧 key，如果 key 长度超过本项目支持的长度，则截取
 		if len(key) > common.KeyLength {
 			key = key[:common.KeyLength]
@@ -336,4 +330,24 @@ func SetupContextForToken(c *gin.Context, token *model.Token, parts ...string) e
 		}
 	}
 	return nil
+}
+
+func splitTokenKeyParts(rawKey string) (string, []string) {
+	key := strings.TrimPrefix(rawKey, "sk-")
+	if key == "" {
+		return "", []string{}
+	}
+	if len(key) > common.KeyLength {
+		delimiter := key[common.KeyLength]
+		if delimiter == '#' || delimiter == '-' {
+			tokenKey := key[:common.KeyLength]
+			suffix := key[common.KeyLength+1:]
+			parts := []string{tokenKey}
+			if suffix != "" {
+				parts = append(parts, strings.Split(suffix, string(delimiter))...)
+			}
+			return tokenKey, parts
+		}
+	}
+	return key, []string{key}
 }
