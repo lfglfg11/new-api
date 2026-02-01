@@ -28,7 +28,7 @@ import {
   copy,
   getQuotaPerUnit,
 } from '../../helpers';
-import { Modal, Toast } from '@douyinfe/semi-ui';
+import { Button, Modal, Toast } from '@douyinfe/semi-ui';
 import { useTranslation } from 'react-i18next';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -570,6 +570,16 @@ const TopUp = () => {
     setQrText('');
   };
 
+  const isMobileBrowser = () =>
+    /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent || '');
+
+  const isAlipayQr = qrText && qrText.startsWith('https://qr.alipay.com');
+
+  const openAlipayApp = () => {
+    if (!qrText) return;
+    window.location.href = qrText;
+  };
+
   const handleTransferCancel = () => {
     setOpenTransfer(false);
   };
@@ -667,6 +677,9 @@ const TopUp = () => {
               src={`/api/qrcode?text=${encodeURIComponent(qrText)}`}
               style={{ width: 220, height: 220 }}
             />
+            {isAlipayQr ? (
+              <Button onClick={openAlipayApp}>{t('打开支付宝')}</Button>
+            ) : null}
           </div>
         ) : null}
       </Modal>
