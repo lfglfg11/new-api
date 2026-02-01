@@ -216,6 +216,17 @@ const TopUp = () => {
             // Stripe 支付回调处理
             window.open(data.pay_link, '_blank');
           } else {
+            if (data?.pay_type === 'qrcode' && data?.qr_text) {
+              const qrUrl = `/api/user/qrcode?text=${encodeURIComponent(
+                data.qr_text,
+              )}`;
+              window.open(qrUrl, '_blank');
+              return;
+            }
+            if (data?.pay_link) {
+              window.open(data.pay_link, '_blank');
+              return;
+            }
             // 普通支付表单提交
             let params = data;
             let url = res.data.url;

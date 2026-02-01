@@ -25,6 +25,8 @@ import (
 func GetTopUpInfo(c *gin.Context) {
 	// 获取支付方式
 	payMethods := operation_setting.PayMethods
+	enableAlipayTopUp := isAlipayEnabled()
+	enableWxpayTopUp := isWxpayEnabled()
 
 	// 如果启用了 Stripe 支付，添加到支付方法列表
 	if setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "" {
@@ -48,8 +50,44 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	if enableAlipayTopUp {
+		hasAlipay := false
+		for _, method := range payMethods {
+			if method["type"] == "alipay" {
+				hasAlipay = true
+				break
+			}
+		}
+		if !hasAlipay {
+			payMethods = append(payMethods, map[string]string{
+				"name":      "支付宝",
+				"type":      "alipay",
+				"color":     "rgba(var(--semi-blue-5), 1)",
+				"min_topup": strconv.Itoa(operation_setting.MinTopUp),
+			})
+		}
+	}
+
+	if enableWxpayTopUp {
+		hasWxpay := false
+		for _, method := range payMethods {
+			if method["type"] == "wxpay" {
+				hasWxpay = true
+				break
+			}
+		}
+		if !hasWxpay {
+			payMethods = append(payMethods, map[string]string{
+				"name":      "微信支付",
+				"type":      "wxpay",
+				"color":     "rgba(var(--semi-green-5), 1)",
+				"min_topup": strconv.Itoa(operation_setting.MinTopUp),
+			})
+		}
+	}
+
 	data := gin.H{
-		"enable_online_topup": operation_setting.PayAddress != "" && operation_setting.EpayId != "" && operation_setting.EpayKey != "",
+		"enable_online_topup": (operation_setting.PayAddress != "" && operation_setting.EpayId != "" && operation_setting.EpayKey != "") || enableAlipayTopUp || enableWxpayTopUp,
 		"enable_stripe_topup": setting.StripeApiSecret != "" && setting.StripeWebhookSecret != "" && setting.StripePriceId != "",
 		"enable_creem_topup":  setting.CreemApiKey != "" && setting.CreemProducts != "[]",
 		"creem_products":      setting.CreemProducts,
@@ -132,6 +170,14 @@ func RequestEpay(c *gin.Context) {
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		c.JSON(200, gin.H{"message": "error", "data": "参数错误"})
+		return
+	}
+	if req.PaymentMethod == "alipay" && isAlipayEnabled() {
+		requestAlipay(c, &req)
+		return
+	}
+	if req.PaymentMethod == "wxpay" && isWxpayEnabled() {
+		requestWxpay(c, &req)
 		return
 	}
 	if req.Amount < getMinTopup() {

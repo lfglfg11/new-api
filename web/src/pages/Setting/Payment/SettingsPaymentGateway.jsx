@@ -43,6 +43,8 @@ export default function SettingsPaymentGateway(props) {
     PayMethods: '',
     AmountOptions: '',
     AmountDiscount: '',
+    AlipayConfig: '',
+    WxpayConfig: '',
   });
   const [originInputs, setOriginInputs] = useState({});
   const formApiRef = useRef(null);
@@ -66,6 +68,8 @@ export default function SettingsPaymentGateway(props) {
         PayMethods: props.options.PayMethods || '',
         AmountOptions: props.options.AmountOptions || '',
         AmountDiscount: props.options.AmountDiscount || '',
+        AlipayConfig: props.options.AlipayConfig || '',
+        WxpayConfig: props.options.WxpayConfig || '',
       };
 
       // 美化 JSON 展示
@@ -82,6 +86,24 @@ export default function SettingsPaymentGateway(props) {
         if (currentInputs.AmountDiscount) {
           currentInputs.AmountDiscount = JSON.stringify(
             JSON.parse(currentInputs.AmountDiscount),
+            null,
+            2,
+          );
+        }
+      } catch {}
+      try {
+        if (currentInputs.AlipayConfig) {
+          currentInputs.AlipayConfig = JSON.stringify(
+            JSON.parse(currentInputs.AlipayConfig),
+            null,
+            2,
+          );
+        }
+      } catch {}
+      try {
+        if (currentInputs.WxpayConfig) {
+          currentInputs.WxpayConfig = JSON.stringify(
+            JSON.parse(currentInputs.WxpayConfig),
             null,
             2,
           );
@@ -138,6 +160,26 @@ export default function SettingsPaymentGateway(props) {
       }
     }
 
+    if (
+      originInputs['AlipayConfig'] !== inputs.AlipayConfig &&
+      inputs.AlipayConfig.trim() !== ''
+    ) {
+      if (!verifyJSON(inputs.AlipayConfig)) {
+        showError(t('支付宝配置不是合法的 JSON 对象'));
+        return;
+      }
+    }
+
+    if (
+      originInputs['WxpayConfig'] !== inputs.WxpayConfig &&
+      inputs.WxpayConfig.trim() !== ''
+    ) {
+      if (!verifyJSON(inputs.WxpayConfig)) {
+        showError(t('微信支付配置不是合法的 JSON 对象'));
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const options = [
@@ -179,6 +221,12 @@ export default function SettingsPaymentGateway(props) {
           key: 'payment_setting.amount_discount',
           value: inputs.AmountDiscount,
         });
+      }
+      if (originInputs['AlipayConfig'] !== inputs.AlipayConfig) {
+        options.push({ key: 'AlipayConfig', value: inputs.AlipayConfig });
+      }
+      if (originInputs['WxpayConfig'] !== inputs.WxpayConfig) {
+        options.push({ key: 'WxpayConfig', value: inputs.WxpayConfig });
       }
 
       // 发送请求
@@ -284,6 +332,30 @@ export default function SettingsPaymentGateway(props) {
             label={t('充值方式设置')}
             placeholder={t('为一个 JSON 文本')}
             autosize
+          />
+
+          <Form.TextArea
+            field='AlipayConfig'
+            label={t('支付宝当面付配置')}
+            placeholder={t(
+              'JSON 示例：{"app_id":"2024xxxx","private_key":"...","public_key":"...","pay_type":"facepay"}',
+            )}
+            autosize
+            extraText={t(
+              'pay_type 可选：facepay/pagepay/wappay。敏感信息不会回显，需重新填写。',
+            )}
+          />
+
+          <Form.TextArea
+            field='WxpayConfig'
+            label={t('微信支付配置')}
+            placeholder={t(
+              'JSON 示例：{"app_id":"wx123","mch_id":"1900000109","mch_certificate_serial_number":"XXXX","mch_apiv3_key":"...","mch_private_key":"C:/path/to/apiclient_key.pem","pay_type":"Native"}',
+            )}
+            autosize
+            extraText={t(
+              'pay_type 目前仅支持 Native。敏感信息不会回显，需重新填写。',
+            )}
           />
 
           <Row
