@@ -45,6 +45,16 @@ export default function SettingsPaymentGateway(props) {
     AmountDiscount: '',
     AlipayConfig: '',
     WxpayConfig: '',
+    AlipayAppId: '',
+    AlipayPrivateKey: '',
+    AlipayPublicKey: '',
+    AlipayPayType: 'facepay',
+    WxpayAppId: '',
+    WxpayMchId: '',
+    WxpayMchCertificateSerialNumber: '',
+    WxpayMchAPIv3Key: '',
+    WxpayMchPrivateKey: '',
+    WxpayPayType: 'Native',
   });
   const [originInputs, setOriginInputs] = useState({});
   const formApiRef = useRef(null);
@@ -70,6 +80,16 @@ export default function SettingsPaymentGateway(props) {
         AmountDiscount: props.options.AmountDiscount || '',
         AlipayConfig: props.options.AlipayConfig || '',
         WxpayConfig: props.options.WxpayConfig || '',
+        AlipayAppId: '',
+        AlipayPrivateKey: '',
+        AlipayPublicKey: '',
+        AlipayPayType: 'facepay',
+        WxpayAppId: '',
+        WxpayMchId: '',
+        WxpayMchCertificateSerialNumber: '',
+        WxpayMchAPIv3Key: '',
+        WxpayMchPrivateKey: '',
+        WxpayPayType: 'Native',
       };
 
       // 美化 JSON 展示
@@ -93,20 +113,25 @@ export default function SettingsPaymentGateway(props) {
       } catch {}
       try {
         if (currentInputs.AlipayConfig) {
-          currentInputs.AlipayConfig = JSON.stringify(
-            JSON.parse(currentInputs.AlipayConfig),
-            null,
-            2,
-          );
+          const parsed = JSON.parse(currentInputs.AlipayConfig);
+          currentInputs.AlipayAppId = parsed.app_id || '';
+          currentInputs.AlipayPrivateKey = parsed.private_key || '';
+          currentInputs.AlipayPublicKey = parsed.public_key || '';
+          currentInputs.AlipayPayType = parsed.pay_type || 'facepay';
+          currentInputs.AlipayConfig = JSON.stringify(parsed, null, 2);
         }
       } catch {}
       try {
         if (currentInputs.WxpayConfig) {
-          currentInputs.WxpayConfig = JSON.stringify(
-            JSON.parse(currentInputs.WxpayConfig),
-            null,
-            2,
-          );
+          const parsed = JSON.parse(currentInputs.WxpayConfig);
+          currentInputs.WxpayAppId = parsed.app_id || '';
+          currentInputs.WxpayMchId = parsed.mch_id || '';
+          currentInputs.WxpayMchCertificateSerialNumber =
+            parsed.mch_certificate_serial_number || '';
+          currentInputs.WxpayMchAPIv3Key = parsed.mch_apiv3_key || '';
+          currentInputs.WxpayMchPrivateKey = parsed.mch_private_key || '';
+          currentInputs.WxpayPayType = parsed.pay_type || 'Native';
+          currentInputs.WxpayConfig = JSON.stringify(parsed, null, 2);
         }
       } catch {}
 
@@ -160,25 +185,38 @@ export default function SettingsPaymentGateway(props) {
       }
     }
 
-    if (
-      originInputs['AlipayConfig'] !== inputs.AlipayConfig &&
-      inputs.AlipayConfig.trim() !== ''
-    ) {
-      if (!verifyJSON(inputs.AlipayConfig)) {
-        showError(t('支付宝配置不是合法的 JSON 对象'));
-        return;
-      }
-    }
+    const alipayConfigPayload = {
+      app_id: inputs.AlipayAppId?.trim(),
+      private_key: inputs.AlipayPrivateKey?.trim(),
+      public_key: inputs.AlipayPublicKey?.trim(),
+      pay_type: inputs.AlipayPayType?.trim() || 'facepay',
+    };
+    const hasAlipayConfig =
+      alipayConfigPayload.app_id ||
+      alipayConfigPayload.private_key ||
+      alipayConfigPayload.public_key;
+    const nextAlipayConfig = hasAlipayConfig
+      ? JSON.stringify(alipayConfigPayload)
+      : '';
 
-    if (
-      originInputs['WxpayConfig'] !== inputs.WxpayConfig &&
-      inputs.WxpayConfig.trim() !== ''
-    ) {
-      if (!verifyJSON(inputs.WxpayConfig)) {
-        showError(t('微信支付配置不是合法的 JSON 对象'));
-        return;
-      }
-    }
+    const wxpayConfigPayload = {
+      app_id: inputs.WxpayAppId?.trim(),
+      mch_id: inputs.WxpayMchId?.trim(),
+      mch_certificate_serial_number:
+        inputs.WxpayMchCertificateSerialNumber?.trim(),
+      mch_apiv3_key: inputs.WxpayMchAPIv3Key?.trim(),
+      mch_private_key: inputs.WxpayMchPrivateKey?.trim(),
+      pay_type: inputs.WxpayPayType?.trim() || 'Native',
+    };
+    const hasWxpayConfig =
+      wxpayConfigPayload.app_id ||
+      wxpayConfigPayload.mch_id ||
+      wxpayConfigPayload.mch_certificate_serial_number ||
+      wxpayConfigPayload.mch_apiv3_key ||
+      wxpayConfigPayload.mch_private_key;
+    const nextWxpayConfig = hasWxpayConfig
+      ? JSON.stringify(wxpayConfigPayload)
+      : '';
 
     setLoading(true);
     try {
@@ -222,11 +260,11 @@ export default function SettingsPaymentGateway(props) {
           value: inputs.AmountDiscount,
         });
       }
-      if (originInputs['AlipayConfig'] !== inputs.AlipayConfig) {
-        options.push({ key: 'AlipayConfig', value: inputs.AlipayConfig });
+      if (originInputs['AlipayConfig'] !== nextAlipayConfig) {
+        options.push({ key: 'AlipayConfig', value: nextAlipayConfig });
       }
-      if (originInputs['WxpayConfig'] !== inputs.WxpayConfig) {
-        options.push({ key: 'WxpayConfig', value: inputs.WxpayConfig });
+      if (originInputs['WxpayConfig'] !== nextWxpayConfig) {
+        options.push({ key: 'WxpayConfig', value: nextWxpayConfig });
       }
 
       // 发送请求
@@ -248,7 +286,11 @@ export default function SettingsPaymentGateway(props) {
       } else {
         showSuccess(t('更新成功'));
         // 更新本地存储的原始值
-        setOriginInputs({ ...inputs });
+        setOriginInputs({
+          ...inputs,
+          AlipayConfig: nextAlipayConfig,
+          WxpayConfig: nextWxpayConfig,
+        });
         props.refresh && props.refresh();
       }
     } catch (error) {
@@ -333,30 +375,78 @@ export default function SettingsPaymentGateway(props) {
             placeholder={t('为一个 JSON 文本')}
             autosize
           />
+          <Row
+            gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
+            style={{ marginTop: 16 }}
+          >
+            <Col span={24}>
+              <Text strong>{t('支付宝当面付配置')}</Text>
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input field='AlipayAppId' label={t('App ID')} />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='AlipayPrivateKey'
+                label={t('应用私钥')}
+                type='password'
+              />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='AlipayPublicKey'
+                label={t('支付宝公钥')}
+              />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='AlipayPayType'
+                label={t('支付方式')}
+                placeholder='facepay / pagepay / wappay'
+              />
+            </Col>
+          </Row>
 
-          <Form.TextArea
-            field='AlipayConfig'
-            label={t('支付宝当面付配置')}
-            placeholder={t(
-              'JSON 示例：{"app_id":"2024xxxx","private_key":"...","public_key":"...","pay_type":"facepay"}',
-            )}
-            autosize
-            extraText={t(
-              'pay_type 可选：facepay/pagepay/wappay。敏感信息不会回显，需重新填写。',
-            )}
-          />
-
-          <Form.TextArea
-            field='WxpayConfig'
-            label={t('微信支付配置')}
-            placeholder={t(
-              'JSON 示例：{"app_id":"wx123","mch_id":"1900000109","mch_certificate_serial_number":"XXXX","mch_apiv3_key":"...","mch_private_key":"C:/path/to/apiclient_key.pem","pay_type":"Native"}',
-            )}
-            autosize
-            extraText={t(
-              'pay_type 目前仅支持 Native。敏感信息不会回显，需重新填写。',
-            )}
-          />
+          <Row
+            gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}
+            style={{ marginTop: 16 }}
+          >
+            <Col span={24}>
+              <Text strong>{t('微信支付配置')}</Text>
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input field='WxpayAppId' label={t('App ID')} />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input field='WxpayMchId' label={t('商户号 Mch ID')} />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='WxpayMchCertificateSerialNumber'
+                label={t('证书序列号')}
+              />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='WxpayMchAPIv3Key'
+                label={t('APIv3 Key')}
+                type='password'
+              />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='WxpayMchPrivateKey'
+                label={t('商户私钥路径')}
+              />
+            </Col>
+            <Col xs={24} sm={24} md={8} lg={8} xl={8}>
+              <Form.Input
+                field='WxpayPayType'
+                label={t('支付方式')}
+                placeholder='Native'
+              />
+            </Col>
+          </Row>
 
           <Row
             gutter={{ xs: 8, sm: 16, md: 24, lg: 24, xl: 24, xxl: 24 }}

@@ -63,8 +63,8 @@ type payResponse struct {
 }
 
 var (
-	wxpayClient           *core.Client
-	wxpayClientLock       sync.Mutex
+	wxpayClient            *core.Client
+	wxpayClientLock        sync.Mutex
 	wxpayClientFingerprint string
 )
 

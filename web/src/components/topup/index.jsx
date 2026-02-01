@@ -217,7 +217,7 @@ const TopUp = () => {
             window.open(data.pay_link, '_blank');
           } else {
             if (data?.pay_type === 'qrcode' && data?.qr_text) {
-              const qrUrl = `/api/user/qrcode?text=${encodeURIComponent(
+              const qrUrl = `/api/qrcode?text=${encodeURIComponent(
                 data.qr_text,
               )}`;
               window.open(qrUrl, '_blank');
