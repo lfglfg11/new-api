@@ -76,6 +76,8 @@ const TopUp = () => {
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [payMethods, setPayMethods] = useState([]);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrText, setQrText] = useState('');
 
   const affFetchedRef = useRef(false);
 
@@ -217,10 +219,8 @@ const TopUp = () => {
             window.open(data.pay_link, '_blank');
           } else {
             if (data?.pay_type === 'qrcode' && data?.qr_text) {
-              const qrUrl = `/api/qrcode?text=${encodeURIComponent(
-                data.qr_text,
-              )}`;
-              window.open(qrUrl, '_blank');
+              setQrText(data.qr_text);
+              setQrOpen(true);
               return;
             }
             if (data?.pay_link) {
@@ -565,6 +565,11 @@ const TopUp = () => {
     setOpen(false);
   };
 
+  const handleQrCancel = () => {
+    setQrOpen(false);
+    setQrText('');
+  };
+
   const handleTransferCancel = () => {
     setOpenTransfer(false);
   };
@@ -644,6 +649,27 @@ const TopUp = () => {
         onCancel={handleHistoryCancel}
         t={t}
       />
+
+      {/* 二维码支付模态框 */}
+      <Modal
+        title={t('请扫码支付')}
+        visible={qrOpen}
+        onCancel={handleQrCancel}
+        maskClosable={false}
+        size='small'
+        centered
+        footer={null}
+      >
+        {qrText ? (
+          <div className='flex flex-col items-center justify-center space-y-3'>
+            <img
+              alt='qrcode'
+              src={`/api/qrcode?text=${encodeURIComponent(qrText)}`}
+              style={{ width: 220, height: 220 }}
+            />
+          </div>
+        ) : null}
+      </Modal>
 
       {/* Creem 充值确认模态框 */}
       <Modal
