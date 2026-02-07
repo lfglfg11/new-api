@@ -8,6 +8,8 @@ import (
 )
 
 var defaultCacheRatio = map[string]float64{
+	"gemini-3-flash-preview":              0.25,
+	"gemini-3-pro-preview":                0.25,
 	"gpt-4":                               0.5,
 	"o1":                                  0.5,
 	"o1-2024-12-17":                       0.5,
@@ -58,6 +60,12 @@ var defaultCacheRatio = map[string]float64{
 	"claude-sonnet-4-5-20250929-thinking": 0.1,
 	"claude-opus-4-5-20251101":            0.1,
 	"claude-opus-4-5-20251101-thinking":   0.1,
+	"claude-opus-4-6":                     0.1,
+	"claude-opus-4-6-thinking":            0.1,
+	"claude-opus-4-6-max":                 0.1,
+	"claude-opus-4-6-high":                0.1,
+	"claude-opus-4-6-medium":              0.1,
+	"claude-opus-4-6-low":                 0.1,
 }
 
 var defaultCreateCacheRatio = map[string]float64{
@@ -80,12 +88,21 @@ var defaultCreateCacheRatio = map[string]float64{
 	"claude-sonnet-4-5-20250929-thinking": 1.25,
 	"claude-opus-4-5-20251101":            1.25,
 	"claude-opus-4-5-20251101-thinking":   1.25,
+	"claude-opus-4-6":                     1.25,
+	"claude-opus-4-6-thinking":            1.25,
+	"claude-opus-4-6-max":                 1.25,
+	"claude-opus-4-6-high":                1.25,
+	"claude-opus-4-6-medium":              1.25,
+	"claude-opus-4-6-low":                 1.25,
 }
 
 //var defaultCreateCacheRatio = map[string]float64{}
 
 var cacheRatioMap map[string]float64
 var cacheRatioMapMutex sync.RWMutex
+
+var createCacheRatioMap map[string]float64
+var createCacheRatioMapMutex sync.RWMutex
 
 // GetCacheRatioMap returns the cache ratio map
 func GetCacheRatioMap() map[string]float64 {
@@ -105,12 +122,35 @@ func CacheRatio2JSONString() string {
 	return string(jsonBytes)
 }
 
+// CreateCacheRatio2JSONString converts the create cache ratio map to a JSON string
+func CreateCacheRatio2JSONString() string {
+	createCacheRatioMapMutex.RLock()
+	defer createCacheRatioMapMutex.RUnlock()
+	jsonBytes, err := json.Marshal(createCacheRatioMap)
+	if err != nil {
+		common.SysLog("error marshalling create cache ratio: " + err.Error())
+	}
+	return string(jsonBytes)
+}
+
 // UpdateCacheRatioByJSONString updates the cache ratio map from a JSON string
 func UpdateCacheRatioByJSONString(jsonStr string) error {
 	cacheRatioMapMutex.Lock()
 	defer cacheRatioMapMutex.Unlock()
 	cacheRatioMap = make(map[string]float64)
 	err := json.Unmarshal([]byte(jsonStr), &cacheRatioMap)
+	if err == nil {
+		InvalidateExposedDataCache()
+	}
+	return err
+}
+
+// UpdateCreateCacheRatioByJSONString updates the create cache ratio map from a JSON string
+func UpdateCreateCacheRatioByJSONString(jsonStr string) error {
+	createCacheRatioMapMutex.Lock()
+	defer createCacheRatioMapMutex.Unlock()
+	createCacheRatioMap = make(map[string]float64)
+	err := json.Unmarshal([]byte(jsonStr), &createCacheRatioMap)
 	if err == nil {
 		InvalidateExposedDataCache()
 	}
@@ -129,7 +169,9 @@ func GetCacheRatio(name string) (float64, bool) {
 }
 
 func GetCreateCacheRatio(name string) (float64, bool) {
-	ratio, ok := defaultCreateCacheRatio[name]
+	createCacheRatioMapMutex.RLock()
+	defer createCacheRatioMapMutex.RUnlock()
+	ratio, ok := createCacheRatioMap[name]
 	if !ok {
 		return 1.25, false // Default to 1.25 if not found
 	}
@@ -141,6 +183,16 @@ func GetCacheRatioCopy() map[string]float64 {
 	defer cacheRatioMapMutex.RUnlock()
 	copyMap := make(map[string]float64, len(cacheRatioMap))
 	for k, v := range cacheRatioMap {
+		copyMap[k] = v
+	}
+	return copyMap
+}
+
+func GetCreateCacheRatioCopy() map[string]float64 {
+	createCacheRatioMapMutex.RLock()
+	defer createCacheRatioMapMutex.RUnlock()
+	copyMap := make(map[string]float64, len(createCacheRatioMap))
+	for k, v := range createCacheRatioMap {
 		copyMap[k] = v
 	}
 	return copyMap
