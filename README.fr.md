@@ -21,9 +21,6 @@
   --><a href="https://github.com/Calcium-Ion/new-api/releases/latest">
     <img src="https://img.shields.io/github/v/release/Calcium-Ion/new-api?color=brightgreen&include_prereleases" alt="version">
   </a><!--
-  --><a href="https://github.com/users/Calcium-Ion/packages/container/package/new-api">
-    <img src="https://img.shields.io/badge/docker-ghcr.io-blue" alt="docker">
-  </a><!--
   --><a href="https://hub.docker.com/r/CalciumIon/new-api">
     <img src="https://img.shields.io/badge/docker-dockerHub-blue" alt="docker">
   </a><!--
@@ -33,8 +30,8 @@
 </p>
 
 <p align="center">
-  <a href="https://trendshift.io/repositories/8227" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/8227" alt="Calcium-Ion%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
+  <a href="https://trendshift.io/repositories/20180" target="_blank">
+    <img src="https://trendshift.io/api/badge/repositories/20180" alt="QuantumNous%2Fnew-api | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
   </a>
   <br>
   <a href="https://hellogithub.com/repository/QuantumNous/new-api" target="_blank">
@@ -56,9 +53,6 @@
 </div>
 
 ## 📝 Description du projet
-
-> [!NOTE]
-> Il s'agit d'un projet open-source développé sur la base de [One API](https://github.com/songquanpeng/one-api)
 
 > [!IMPORTANT]
 > - Ce projet est uniquement destiné à des fins d'apprentissage personnel, sans garantie de stabilité ni de support technique.
@@ -452,6 +446,8 @@ Bienvenue à toutes les formes de contribution!
 ## 📜 Licence
 
 Ce projet est sous licence [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE).
+
+Il s'agit d'un projet open-source développé sur la base de [One API](https://github.com/songquanpeng/one-api) (licence MIT).
 
 Si les politiques de votre organisation ne permettent pas l'utilisation de logiciels sous licence AGPLv3, ou si vous souhaitez éviter les obligations open-source de l'AGPLv3, veuillez nous contacter à : [support@quantumnous.com](mailto:support@quantumnous.com)
 
