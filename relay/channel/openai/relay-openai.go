@@ -122,11 +122,26 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var streamItems []string // store stream items
 	var lastStreamData string
 	var secondLastStreamData string // 存储倒数第二个stream data，用于音频模型
+	var streamErr *types.NewAPIError
 
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
 
 	helper.StreamScannerHandler(c, resp, info, func(data string) bool {
+		if len(data) > 0 {
+			var streamResp dto.SimpleResponse
+			if err := common.UnmarshalJsonStr(data, &streamResp); err == nil {
+				if oaiErr := streamResp.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
+					statusCode := resp.StatusCode
+					if statusCode == http.StatusOK {
+						statusCode = http.StatusBadRequest
+					}
+					streamErr = types.WithOpenAIError(*oaiErr, statusCode)
+					return false
+				}
+			}
+		}
+
 		if lastStreamData != "" {
 			err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
 			if err != nil {
@@ -144,6 +159,10 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 		}
 		return true
 	})
+
+	if streamErr != nil {
+		return nil, streamErr
+	}
 
 	// 对音频模型，从倒数第二个stream data中提取usage信息
 	if isAudioModel && secondLastStreamData != "" {
