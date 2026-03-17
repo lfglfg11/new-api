@@ -132,6 +132,9 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			var streamResp dto.SimpleResponse
 			if err := common.UnmarshalJsonStr(data, &streamResp); err == nil {
 				if oaiErr := streamResp.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
+					if writeErr := helper.StringData(c, data); writeErr != nil {
+						logger.LogError(c, "failed to write stream error chunk: "+writeErr.Error())
+					}
 					statusCode := resp.StatusCode
 					if statusCode == http.StatusOK {
 						statusCode = http.StatusBadRequest
