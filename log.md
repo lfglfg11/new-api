@@ -14,3 +14,10 @@
 
 ## 2026-02-02
 - **迁移鉴权兼容**：完善 token 解析逻辑，兼容 done-hub 旧分隔符并避免普通 key 被误判为指定渠道。
+
+## 2026-03-20
+- **上游重置后冲突合并**：完成 `hub-merge-upstream` 合并 `main` 过程中的 31 个 add/add 冲突清理，已进入可提交状态（`All conflicts fixed but you are still merging`）。
+- **支付主链路保留策略**：`controller/topup.go`、`router/api-router.go`、`model/option.go`、`web/src/components/topup/*`、`web/src/pages/Setting/Payment/SettingsPaymentGateway.jsx` 以本地实现为基线，确保支付宝当面付、微信支付与二维码流程不回退。
+- **上游能力吸收策略**：公共能力与中立增强（如 `relay/common/override*.go`、`middleware/*`、`service/log_info_generate.go`、多语言与前端日志增强）采用上游版本，降低后续再同步成本。
+- **流式误扣费修复校验**：已核对 OpenAI 流式错误检测链路仍存在（`GetOpenAIError` 相关逻辑可检索到），避免“请求过程报错却被判成功”导致结算误扣费回归。
+- **验证状态**：受网络访问 `proxy.golang.org` 超时影响，`go mod tidy` / `go test ./...` 未能完成，需在可联网环境下补跑。
