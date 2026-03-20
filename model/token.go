@@ -189,11 +189,16 @@ func ValidateUserToken(key string) (token *Token, err error) {
 	if key == "" {
 		return nil, errors.New("未提供令牌")
 	}
-	token, err = GetTokenByKey(key, false)
+	lookupKey := key
+	// 兼容 OneHub 迁移 key：旧格式可能为 59 位，数据库仍存储 48 位主 key。
+	if len(lookupKey) == 59 {
+		lookupKey = lookupKey[:common.KeyLength]
+	}
+	token, err = GetTokenByKey(lookupKey, false)
 	if err == nil {
 		if token.Status == common.TokenStatusExhausted {
-			keyPrefix := key[:3]
-			keySuffix := key[len(key)-3:]
+			keyPrefix := lookupKey[:3]
+			keySuffix := lookupKey[len(lookupKey)-3:]
 			return token, errors.New("该令牌额度已用尽 TokenStatusExhausted[sk-" + keyPrefix + "***" + keySuffix + "]")
 		} else if token.Status == common.TokenStatusExpired {
 			return token, errors.New("该令牌已过期")
@@ -220,8 +225,8 @@ func ValidateUserToken(key string) (token *Token, err error) {
 					common.SysLog("failed to update token status" + err.Error())
 				}
 			}
-			keyPrefix := key[:3]
-			keySuffix := key[len(key)-3:]
+			keyPrefix := lookupKey[:3]
+			keySuffix := lookupKey[len(lookupKey)-3:]
 			return token, fmt.Errorf("[sk-%s***%s] 该令牌额度已用尽 !token.UnlimitedQuota && token.RemainQuota = %d", keyPrefix, keySuffix, token.RemainQuota)
 		}
 		return token, nil

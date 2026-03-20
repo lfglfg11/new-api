@@ -21,3 +21,4 @@
 - **上游能力吸收策略**：公共能力与中立增强（如 `relay/common/override*.go`、`middleware/*`、`service/log_info_generate.go`、多语言与前端日志增强）采用上游版本，降低后续再同步成本。
 - **流式误扣费修复校验**：已核对 OpenAI 流式错误检测链路仍存在（`GetOpenAIError` 相关逻辑可检索到），避免“请求过程报错却被判成功”导致结算误扣费回归。
 - **验证状态**：受网络访问 `proxy.golang.org` 超时影响，`go mod tidy` / `go test ./...` 未能完成，需在可联网环境下补跑。
+- **OneHub 迁移 token 兼容恢复**：在 `model/token.go` 的 `ValidateUserToken` 中恢复 59 位 key 截取前 48 位后查库逻辑，避免迁移库 token 校验失败。
