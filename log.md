@@ -22,3 +22,7 @@
 - **流式误扣费修复校验**：已核对 OpenAI 流式错误检测链路仍存在（`GetOpenAIError` 相关逻辑可检索到），避免“请求过程报错却被判成功”导致结算误扣费回归。
 - **验证状态**：受网络访问 `proxy.golang.org` 超时影响，`go mod tidy` / `go test ./...` 未能完成，需在可联网环境下补跑。
 - **OneHub 迁移 token 兼容恢复**：在 `model/token.go` 的 `ValidateUserToken` 中恢复 59 位 key 截取前 48 位后查库逻辑，避免迁移库 token 校验失败。
+
+## 2026-03-21
+- **Hub 构建失败排查**：确认 hub 与 hub0 在支付宝/微信/二维码核心实现文件一致，功能未回退。
+- **CI 依赖校验修复**：补齐 `go.sum` 中 `skip2/go-qrcode`、`smartwalle/alipay/v3`、`wechatpay-apiv3/wechatpay-go` 的缺失校验条目，修复 Docker 构建阶段缺失 go.sum entry 的失败风险。
