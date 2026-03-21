@@ -26,3 +26,5 @@
 ## 2026-03-21
 - **Hub 构建失败排查**：确认 hub 与 hub0 在支付宝/微信/二维码核心实现文件一致，功能未回退。
 - **CI 依赖校验修复**：补齐 `go.sum` 中 `skip2/go-qrcode`、`smartwalle/alipay/v3`、`wechatpay-apiv3/wechatpay-go` 的缺失校验条目，修复 Docker 构建阶段缺失 go.sum entry 的失败风险。
+- **main/hub0 对照修复**：定位到 `hub` 分支包含 `controller/topup_waffo.go`，但 `go.mod` 未声明 `github.com/waffo-com/waffo-go`；已补齐 direct require。
+- **Alipay 间接依赖修复**：补齐 `go.sum` 中 `smartwalle/ncrypto`、`smartwalle/ngx`、`smartwalle/nsign` 校验条目，消除 CI 中 `missing go.sum entry` 类报错。
