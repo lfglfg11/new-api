@@ -2,7 +2,7 @@ name: Publish Docker image (hub)
 
 on:
   push:
-    branches: [hub]  # 仅在 hub 分支触发
+    branches: [hub, hub0]  # 仅在 hub 分支触发
   workflow_dispatch:  # 支持手动触发
 
 jobs:
