@@ -32,3 +32,5 @@
 ## 2026-03-23
 - **OneHub 令牌兼容回滚**：恢复 `middleware/auth.go` 中 `splitTokenKeyParts` 解析逻辑，避免普通老令牌被 `-` 误切分为“指定渠道”参数导致 `普通用户不支持指定渠道` 误报。
 - **修复验证**：执行 `go test ./middleware/...` 编译通过。
+- **无效令牌兼容补齐**：`TokenAuthReadOnly` 改为复用 `splitTokenKeyParts` 并执行 48 位截断，避免迁移令牌在只读鉴权路径被误判为无效。
+- **hub0 对齐**：`model/token.go` 的 `ValidateUserToken` 截断逻辑恢复为 `len(key) > 48` 后 `key[:48]` 的原始写法。

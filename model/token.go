@@ -190,8 +190,8 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		return nil, errors.New("未提供令牌")
 	}
 	common.SysLog(fmt.Sprintf("ValidateUserToken checking key: %s, len: %d", key, len(key)))
-	if len(key) > common.KeyLength {
-		key = key[:common.KeyLength]
+	if len(key) > 48 {
+		key = key[:48]
 		common.SysLog(fmt.Sprintf("Key truncated to 48 chars: %s, new len: %d", key, len(key)))
 	}
 	token, err = GetTokenByKey(key, false)
