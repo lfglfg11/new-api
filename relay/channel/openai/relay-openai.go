@@ -127,28 +127,11 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
 
-	helper.StreamScannerHandler(c, resp, info, func(data string) bool {
-		if len(data) > 0 {
-			var streamResp dto.SimpleResponse
-			if err := common.UnmarshalJsonStr(data, &streamResp); err == nil {
-				if oaiErr := streamResp.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
-					if writeErr := helper.StringData(c, data); writeErr != nil {
-						logger.LogError(c, "failed to write stream error chunk: "+writeErr.Error())
-					}
-					statusCode := resp.StatusCode
-					if statusCode == http.StatusOK {
-						statusCode = http.StatusBadRequest
-					}
-					streamErr = types.WithOpenAIError(*oaiErr, statusCode)
-					return false
-				}
-			}
-		}
-
+	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 		if lastStreamData != "" {
-			err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent)
-			if err != nil {
+			if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
 				common.SysLog("error handling stream format: " + err.Error())
+				sr.Error(err)
 			}
 		}
 		if len(data) > 0 {
@@ -160,7 +143,6 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			lastStreamData = data
 			streamItems = append(streamItems, data)
 		}
-		return true
 	})
 
 	if streamErr != nil {
