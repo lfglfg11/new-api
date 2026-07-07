@@ -104,12 +104,13 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 
 		if !hasWaffo {
-			payMethods = append(payMethods, map[string]string{
+			waffoMethod := map[string]string{
 				"name":      "Waffo (Global Payment)",
 				"type":      model.PaymentMethodWaffo,
 				"color":     "rgba(var(--semi-blue-5), 1)",
-				"min_topup": strconv.Itoa(operation_setting.MinTopUp),
-			})
+				"min_topup": strconv.Itoa(setting.WaffoMinTopUp),
+			}
+			payMethods = append(payMethods, waffoMethod)
 		}
 	}
 
