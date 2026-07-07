@@ -109,7 +109,8 @@ func GetTopUpInfo(c *gin.Context) {
 				"type":      model.PaymentMethodWaffo,
 				"color":     "rgba(var(--semi-blue-5), 1)",
 				"min_topup": strconv.Itoa(operation_setting.MinTopUp),
-			})
+			}
+			payMethods = append(payMethods, waffoMethod)
 		}
 	}
 
