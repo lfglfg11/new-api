@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
+
 import type {
   ApiResponse,
   PlanRecord,
@@ -129,6 +130,13 @@ export async function paySubscriptionWaffoPancake(
   return res.data
 }
 
+export async function paySubscriptionBalance(
+  data: SubscriptionPayRequest
+): Promise<SubscriptionPayResponse> {
+  const res = await api.post('/api/subscription/balance/pay', data)
+  return res.data
+}
+
 // Mints a Pancake OnetimeProduct (see controller for the OnetimeProduct vs
 // SubscriptionProduct rationale) using persisted creds + StoreID.
 export async function createWaffoPancakeSubscriptionProduct(data: {
@@ -152,7 +160,7 @@ export async function listWaffoPancakeSubscriptionProductOptions(): Promise<
     products: { id: string; name: string; status: string }[]
   }>
 > {
-  const res = await api.post(
+  const res = await api.get(
     '/api/option/waffo-pancake/subscription-product-options'
   )
   return res.data
