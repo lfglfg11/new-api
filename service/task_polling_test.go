@@ -125,37 +125,74 @@ func seedPollingTask(t *testing.T, channelID int, publicID string, upstreamID st
 	return task
 }
 
-func TestUpdateVideoTasksDefaultSleepWaitsBetweenTasks(t *testing.T) {
+func setTaskQueryLimit(t *testing.T, limit int) {
+	t.Helper()
+	previous := constant.TaskQueryLimit
+	constant.TaskQueryLimit = limit
+	t.Cleanup(func() { constant.TaskQueryLimit = previous })
+}
+
+func TestUpdateVideoTasksPollsSameChannelTasksConcurrently(t *testing.T) {
 	truncate(t)
 
 	const channelID = 101
 	seedTaskPollingChannel(t, channelID, false)
-	first := seedPollingTask(t, channelID, "task_public_1", "upstream_1")
-	second := seedPollingTask(t, channelID, "task_public_2", "upstream_2")
+	slowTask := seedPollingTask(t, channelID, "task_public_same_channel_slow", "upstream_same_channel_slow")
+	fastTask := seedPollingTask(t, channelID, "task_public_same_channel_fast", "upstream_same_channel_fast")
 
-	adaptor := &taskPollingFetchAdaptor{}
+	adaptor := &taskPollingFetchAdaptor{
+		blockTaskID:  slowTask.GetUpstreamTaskID(),
+		blockStarted: make(chan struct{}),
+		releaseBlock: make(chan struct{}),
+	}
+	var releaseOnce sync.Once
+	releaseBlockedTask := func() {
+		releaseOnce.Do(func() {
+			close(adaptor.releaseBlock)
+		})
+	}
+	t.Cleanup(releaseBlockedTask)
 	previousFactory := GetTaskAdaptorFunc
 	GetTaskAdaptorFunc = func(constant.TaskPlatform) TaskPollingAdaptor { return adaptor }
 	t.Cleanup(func() { GetTaskAdaptorFunc = previousFactory })
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	err := UpdateVideoTasks(ctx, constant.TaskPlatform("kling"), map[int][]string{
-		channelID: {
-			first.GetUpstreamTaskID(),
-			second.GetUpstreamTaskID(),
-		},
-	}, map[string]*model.Task{
-		first.GetUpstreamTaskID():  first,
-		second.GetUpstreamTaskID(): second,
+	errCh := make(chan error, 1)
+	gopool.Go(func() {
+		errCh <- UpdateVideoTasks(context.Background(), constant.TaskPlatform("kling"), map[int][]string{
+			channelID: {
+				slowTask.GetUpstreamTaskID(),
+				fastTask.GetUpstreamTaskID(),
+			},
+		}, map[string]*model.Task{
+			slowTask.GetUpstreamTaskID(): slowTask,
+			fastTask.GetUpstreamTaskID(): fastTask,
+		})
 	})
 
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.Equal(t, 1, adaptor.fetchCount())
+	select {
+	case <-adaptor.blockStarted:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("slow task did not start blocking")
+	}
+
+	require.Eventually(t, func() bool {
+		for _, taskID := range adaptor.fetchedTaskIDs() {
+			if taskID == fastTask.GetUpstreamTaskID() {
+				return true
+			}
+		}
+		return false
+	}, 500*time.Millisecond, 10*time.Millisecond)
+
+	releaseBlockedTask()
+	require.NoError(t, <-errCh)
+	assert.ElementsMatch(t, []string{
+		slowTask.GetUpstreamTaskID(),
+		fastTask.GetUpstreamTaskID(),
+	}, adaptor.fetchedTaskIDs())
 }
 
-func TestUpdateVideoTasksCanSkipPollingSleepPerChannel(t *testing.T) {
+func TestUpdateVideoTasksPollsAllTasksWithSleepSettingEnabled(t *testing.T) {
 	truncate(t)
 
 	const channelID = 102
@@ -185,7 +222,7 @@ func TestUpdateVideoTasksCanSkipPollingSleepPerChannel(t *testing.T) {
 	assert.Equal(t, 2, adaptor.fetchCount())
 }
 
-func TestUpdateVideoTasksDefaultSleepDoesNotBlockOtherChannels(t *testing.T) {
+func TestUpdateVideoTasksPollsAllChannelsConcurrently(t *testing.T) {
 	truncate(t)
 
 	const firstChannelID = 201
@@ -221,8 +258,13 @@ func TestUpdateVideoTasksDefaultSleepDoesNotBlockOtherChannels(t *testing.T) {
 		secondChannelSecond.GetUpstreamTaskID(): secondChannelSecond,
 	})
 
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.ElementsMatch(t, []string{"upstream_a_1", "upstream_b_1"}, adaptor.fetchedTaskIDs())
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{
+		firstChannelFirst.GetUpstreamTaskID(),
+		firstChannelSecond.GetUpstreamTaskID(),
+		secondChannelFirst.GetUpstreamTaskID(),
+		secondChannelSecond.GetUpstreamTaskID(),
+	}, adaptor.fetchedTaskIDs())
 }
 
 func TestUpdateVideoTasksSlowChannelDoesNotBlockOtherChannels(t *testing.T) {
@@ -278,9 +320,14 @@ func TestUpdateVideoTasksSlowChannelDoesNotBlockOtherChannels(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		fetchedTaskIDs := adaptor.fetchedTaskIDs()
-		return len(fetchedTaskIDs) == 2 &&
-			fetchedTaskIDs[0] == fastFirst.GetUpstreamTaskID() &&
-			fetchedTaskIDs[1] == fastSecond.GetUpstreamTaskID()
+		if len(fetchedTaskIDs) != 2 {
+			return false
+		}
+		fetched := map[string]bool{}
+		for _, taskID := range fetchedTaskIDs {
+			fetched[taskID] = true
+		}
+		return fetched[fastFirst.GetUpstreamTaskID()] && fetched[fastSecond.GetUpstreamTaskID()]
 	}, 500*time.Millisecond, 10*time.Millisecond)
 
 	releaseBlockedTask()
@@ -292,42 +339,28 @@ func TestUpdateVideoTasksSlowChannelDoesNotBlockOtherChannels(t *testing.T) {
 	}, adaptor.fetchedTaskIDs())
 }
 
-func TestUpdateVideoTasksMixedChannelSleepSettings(t *testing.T) {
+func TestRunTaskPollingOnceScansBeyondQueryLimit(t *testing.T) {
 	truncate(t)
+	setTaskQueryLimit(t, 2)
 
-	const sleepyChannelID = 301
-	const fastChannelID = 302
-	seedTaskPollingChannel(t, sleepyChannelID, false)
-	seedTaskPollingChannel(t, fastChannelID, true)
-	sleepyFirst := seedPollingTask(t, sleepyChannelID, "task_public_9", "upstream_sleepy_1")
-	sleepySecond := seedPollingTask(t, sleepyChannelID, "task_public_10", "upstream_sleepy_2")
-	fastFirst := seedPollingTask(t, fastChannelID, "task_public_11", "upstream_fast_1")
-	fastSecond := seedPollingTask(t, fastChannelID, "task_public_12", "upstream_fast_2")
+	const channelID = 501
+	seedTaskPollingChannel(t, channelID, true)
+	first := seedPollingTask(t, channelID, "task_public_page_1", "upstream_page_1")
+	second := seedPollingTask(t, channelID, "task_public_page_2", "upstream_page_2")
+	third := seedPollingTask(t, channelID, "task_public_page_3", "upstream_page_3")
 
 	adaptor := &taskPollingFetchAdaptor{}
 	previousFactory := GetTaskAdaptorFunc
 	GetTaskAdaptorFunc = func(constant.TaskPlatform) TaskPollingAdaptor { return adaptor }
 	t.Cleanup(func() { GetTaskAdaptorFunc = previousFactory })
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	summary := RunTaskPollingOnce(context.Background(), nil)
 
-	err := UpdateVideoTasks(ctx, constant.TaskPlatform("kling"), map[int][]string{
-		sleepyChannelID: {
-			sleepyFirst.GetUpstreamTaskID(),
-			sleepySecond.GetUpstreamTaskID(),
-		},
-		fastChannelID: {
-			fastFirst.GetUpstreamTaskID(),
-			fastSecond.GetUpstreamTaskID(),
-		},
-	}, map[string]*model.Task{
-		sleepyFirst.GetUpstreamTaskID():  sleepyFirst,
-		sleepySecond.GetUpstreamTaskID(): sleepySecond,
-		fastFirst.GetUpstreamTaskID():    fastFirst,
-		fastSecond.GetUpstreamTaskID():   fastSecond,
-	})
-
-	require.ErrorIs(t, err, context.DeadlineExceeded)
-	assert.ElementsMatch(t, []string{"upstream_sleepy_1", "upstream_fast_1", "upstream_fast_2"}, adaptor.fetchedTaskIDs())
+	assert.Equal(t, 3, summary.UnfinishedTasks)
+	assert.Equal(t, 1, summary.PlatformsScanned)
+	assert.ElementsMatch(t, []string{
+		first.GetUpstreamTaskID(),
+		second.GetUpstreamTaskID(),
+		third.GetUpstreamTaskID(),
+	}, adaptor.fetchedTaskIDs())
 }

@@ -37,6 +37,10 @@ type TaskPollingAdaptor interface {
 // 打破 service -> relay -> relay/channel -> service 的循环依赖。
 var GetTaskAdaptorFunc func(platform constant.TaskPlatform) TaskPollingAdaptor
 
+const (
+	defaultTaskPollingQueryLimit = 1000
+)
+
 // sweepTimedOutTasks 在主轮询之前独立清理超时任务。
 // 每次最多处理 100 条，剩余的下个周期继续处理。
 // 使用 per-task CAS (UpdateWithStatus) 防止覆盖被正常轮询已推进的任务。
@@ -113,60 +117,77 @@ func RunTaskPollingOnce(ctx context.Context, report func(processed, total int)) 
 
 	common.SysLog("任务进度轮询开始")
 	sweepTimedOutTasks(ctx)
-	allTasks := model.GetAllUnFinishSyncTasks(constant.TaskQueryLimit)
-	summary.UnfinishedTasks = len(allTasks)
-	platformTask := make(map[constant.TaskPlatform][]*model.Task)
-	for _, t := range allTasks {
-		platformTask[t.Platform] = append(platformTask[t.Platform], t)
+	queryLimit := constant.TaskQueryLimit
+	if queryLimit <= 0 {
+		queryLimit = defaultTaskPollingQueryLimit
 	}
-
-	totalPlatforms := len(platformTask)
-	processedPlatforms := 0
-	for platform, tasks := range platformTask {
-		if ctx.Err() != nil {
+	maxTaskID := model.GetMaxUnfinishedSyncTaskID()
+	lastTaskID := int64(0)
+	scannedPlatforms := make(map[constant.TaskPlatform]bool)
+	lastTotalPlatforms := 0
+	for lastTaskID < maxTaskID && ctx.Err() == nil {
+		allTasks := model.GetUnfinishedSyncTasksBatch(lastTaskID, maxTaskID, queryLimit)
+		if len(allTasks) == 0 {
 			break
 		}
-		if report != nil {
-			report(processedPlatforms, totalPlatforms)
-		}
-		processedPlatforms++
-		if len(tasks) == 0 {
-			continue
-		}
-		summary.PlatformsScanned++
-		taskChannelM := make(map[int][]string)
-		taskM := make(map[string]*model.Task)
-		nullTaskIds := make([]int64, 0)
-		for _, task := range tasks {
-			upstreamID := task.GetUpstreamTaskID()
-			if upstreamID == "" {
-				// 统计失败的未完成任务
-				nullTaskIds = append(nullTaskIds, task.ID)
-				continue
-			}
-			taskM[upstreamID] = task
-			taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
-		}
-		if len(nullTaskIds) > 0 {
-			summary.NullTasksFailed += len(nullTaskIds)
-			err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
-				"status":   "FAILURE",
-				"progress": "100%",
-			})
-			if err != nil {
-				logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
-			} else {
-				logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
-			}
-		}
-		if len(taskChannelM) == 0 {
-			continue
+		lastTaskID = allTasks[len(allTasks)-1].ID
+		summary.UnfinishedTasks += len(allTasks)
+
+		platformTask := make(map[constant.TaskPlatform][]*model.Task)
+		for _, t := range allTasks {
+			platformTask[t.Platform] = append(platformTask[t.Platform], t)
 		}
 
-		DispatchPlatformUpdate(ctx, platform, taskChannelM, taskM)
+		totalPlatforms := len(platformTask)
+		lastTotalPlatforms = totalPlatforms
+		processedPlatforms := 0
+		for platform, tasks := range platformTask {
+			if ctx.Err() != nil {
+				break
+			}
+			if report != nil {
+				report(processedPlatforms, totalPlatforms)
+			}
+			processedPlatforms++
+			if len(tasks) == 0 {
+				continue
+			}
+			scannedPlatforms[platform] = true
+			taskChannelM := make(map[int][]string)
+			taskM := make(map[string]*model.Task)
+			nullTaskIds := make([]int64, 0)
+			for _, task := range tasks {
+				upstreamID := task.GetUpstreamTaskID()
+				if upstreamID == "" {
+					// 统计失败的未完成任务
+					nullTaskIds = append(nullTaskIds, task.ID)
+					continue
+				}
+				taskM[upstreamID] = task
+				taskChannelM[task.ChannelId] = append(taskChannelM[task.ChannelId], upstreamID)
+			}
+			if len(nullTaskIds) > 0 {
+				summary.NullTasksFailed += len(nullTaskIds)
+				err := model.TaskBulkUpdateByID(nullTaskIds, map[string]any{
+					"status":   "FAILURE",
+					"progress": "100%",
+				})
+				if err != nil {
+					logger.LogError(ctx, fmt.Sprintf("Fix null task_id task error: %v", err))
+				} else {
+					logger.LogInfo(ctx, fmt.Sprintf("Fix null task_id task success: %v", nullTaskIds))
+				}
+			}
+			if len(taskChannelM) == 0 {
+				continue
+			}
+
+			DispatchPlatformUpdate(ctx, platform, taskChannelM, taskM)
+		}
 	}
+	summary.PlatformsScanned = len(scannedPlatforms)
 	if report != nil && ctx.Err() == nil {
-		report(totalPlatforms, totalPlatforms)
+		report(lastTotalPlatforms, lastTotalPlatforms)
 	}
 	common.SysLog("任务进度轮询完成")
 	return summary
@@ -377,6 +398,9 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 	if len(taskIds) == 0 {
 		return nil
 	}
+	if GetTaskAdaptorFunc == nil {
+		return fmt.Errorf("video adaptor factory not initialized")
+	}
 	cacheGetChannel, err := model.CacheGetChannel(channelId)
 	if err != nil {
 		// Collect DB primary key IDs for bulk update (taskIds are upstream IDs, not task_id column values)
@@ -396,8 +420,7 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 		}
 		return fmt.Errorf("CacheGetChannel failed: %w", err)
 	}
-	adaptor := GetTaskAdaptorFunc(platform)
-	if adaptor == nil {
+	if adaptor := GetTaskAdaptorFunc(platform); adaptor == nil {
 		return fmt.Errorf("video adaptor not found")
 	}
 	info := &relaycommon.RelayInfo{}
@@ -405,27 +428,45 @@ func updateVideoTasks(ctx context.Context, platform constant.TaskPlatform, chann
 		ChannelBaseUrl: cacheGetChannel.GetBaseURL(),
 	}
 	info.ApiKey = cacheGetChannel.Key
-	adaptor.Init(info)
-	disablePollingSleep := cacheGetChannel.GetOtherSettings().DisableTaskPollingSleep
-	for i, taskId := range taskIds {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err := updateVideoSingleTask(ctx, adaptor, cacheGetChannel, taskId, taskM); err != nil {
-			logger.LogError(ctx, fmt.Sprintf("Failed to update video task %s: %s", taskId, err.Error()))
-		}
-		if disablePollingSleep || i == len(taskIds)-1 {
-			continue
-		}
 
-		// sleep 1 second between tasks for this channel only.
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(1 * time.Second):
+	var wg sync.WaitGroup
+	var errMu sync.Mutex
+	var firstErr error
+
+	for _, taskId := range taskIds {
+		if ctx.Err() != nil {
+			break
 		}
+		taskId := taskId
+		wg.Add(1)
+		gopool.Go(func() {
+			defer wg.Done()
+			if ctx.Err() != nil {
+				return
+			}
+			adaptor := GetTaskAdaptorFunc(platform)
+			if adaptor == nil {
+				errMu.Lock()
+				if firstErr == nil {
+					firstErr = fmt.Errorf("video adaptor not found")
+				}
+				errMu.Unlock()
+				return
+			}
+			adaptor.Init(info)
+
+			if err := updateVideoSingleTask(ctx, adaptor, cacheGetChannel, taskId, taskM); err != nil {
+				logger.LogError(ctx, fmt.Sprintf("Failed to update video task %s: %s", taskId, err.Error()))
+			}
+		})
 	}
-	return nil
+	wg.Wait()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	errMu.Lock()
+	defer errMu.Unlock()
+	return firstErr
 }
 
 func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *model.Channel, taskId string, taskM map[string]*model.Task) error {

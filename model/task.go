@@ -305,10 +305,39 @@ func GetTimedOutUnfinishedTasks(cutoffUnix int64, limit int) []*Task {
 }
 
 func GetAllUnFinishSyncTasks(limit int) []*Task {
+	return GetUnfinishedSyncTasksBatch(0, 0, limit)
+}
+
+func GetMaxUnfinishedSyncTaskID() int64 {
+	var id int64
+	err := DB.Model(&Task{}).
+		Where("progress != ?", "100%").
+		Where("status != ?", TaskStatusFailure).
+		Where("status != ?", TaskStatusSuccess).
+		Order("id desc").
+		Limit(1).
+		Pluck("id", &id).Error
+	if err != nil {
+		return 0
+	}
+	return id
+}
+
+func GetUnfinishedSyncTasksBatch(afterID int64, maxID int64, limit int) []*Task {
 	var tasks []*Task
-	var err error
-	// get all tasks progress is not 100%
-	err = DB.Where("progress != ?", "100%").Where("status != ?", TaskStatusFailure).Where("status != ?", TaskStatusSuccess).Limit(limit).Order("id").Find(&tasks).Error
+	query := DB.Where("progress != ?", "100%").
+		Where("status != ?", TaskStatusFailure).
+		Where("status != ?", TaskStatusSuccess)
+	if afterID > 0 {
+		query = query.Where("id > ?", afterID)
+	}
+	if maxID > 0 {
+		query = query.Where("id <= ?", maxID)
+	}
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	err := query.Order("id").Find(&tasks).Error
 	if err != nil {
 		return nil
 	}
