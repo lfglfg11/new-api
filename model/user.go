@@ -111,6 +111,7 @@ func UpdateUserSetting(userId int, setting dto.UserSetting) error {
 	if err = DB.Model(&User{}).Where("id = ?", userId).Update("setting", settingValue).Error; err != nil {
 		return err
 	}
+	clearAdminRecordIpLogCache()
 	return updateUserSettingCache(userId, settingValue)
 }
 

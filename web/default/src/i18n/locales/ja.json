@@ -2483,6 +2483,7 @@
     "Log Directory": "ログディレクトリ",
     "Log File Count": "ログファイル数",
     "Log files older than {{value}} days will be deleted.": "{{value}}日前より古いログファイルが削除されます。",
+    "Log IP address for every user's usage and error logs": "すべてのユーザーの使用ログとエラーログにIPアドレスを記録する",
     "Log IP address for usage and error logs": "使用状況およびエラーログのためにIPアドレスを記録する",
     "Log Maintenance": "ログのメンテナンス",
     "Log Type": "ログタイプ",

@@ -2483,6 +2483,7 @@
     "Log Directory": "Répertoire des journaux",
     "Log File Count": "Nombre de fichiers journaux",
     "Log files older than {{value}} days will be deleted.": "Les fichiers journaux de plus de {{value}} jours seront supprimés.",
+    "Log IP address for every user's usage and error logs": "Enregistrer l'adresse IP pour les journaux d'utilisation et d'erreurs de tous les utilisateurs",
     "Log IP address for usage and error logs": "Enregistrer l'adresse IP pour les journaux d'utilisation et d'erreurs",
     "Log Maintenance": "Maintenance des journaux",
     "Log Type": "Type de journal",

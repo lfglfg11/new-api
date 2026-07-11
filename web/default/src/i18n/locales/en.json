@@ -2483,6 +2483,7 @@
     "Log Directory": "Log Directory",
     "Log File Count": "Log File Count",
     "Log files older than {{value}} days will be deleted.": "Log files older than {{value}} days will be deleted.",
+    "Log IP address for every user's usage and error logs": "Log IP address for every user's usage and error logs",
     "Log IP address for usage and error logs": "Log IP address for usage and error logs",
     "Log Maintenance": "Log Maintenance",
     "Log Type": "Log Type",

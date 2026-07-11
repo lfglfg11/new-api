@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -15,6 +16,12 @@ import (
 
 	"gorm.io/gorm"
 )
+
+var adminRecordIpLogCache = struct {
+	sync.Mutex
+	enabled   bool
+	expiresAt time.Time
+}{}
 
 func applyExplicitLogTextFilter(tx *gorm.DB, column string, value string) (*gorm.DB, error) {
 	if value == "" {
@@ -251,6 +258,50 @@ func RecordOperationAuditLog(logUserId int, content string, ip string, action st
 	}
 }
 
+func shouldRecordRequestIP(userId int) bool {
+	if settingMap, err := GetUserSetting(userId, false); err == nil && settingMap.RecordIpLog {
+		return true
+	}
+	return adminRecordIpLogEnabled()
+}
+
+func adminRecordIpLogEnabled() bool {
+	now := time.Now()
+	adminRecordIpLogCache.Lock()
+	if now.Before(adminRecordIpLogCache.expiresAt) {
+		enabled := adminRecordIpLogCache.enabled
+		adminRecordIpLogCache.Unlock()
+		return enabled
+	}
+	adminRecordIpLogCache.Unlock()
+
+	var admins []User
+	if err := DB.Model(&User{}).Select("setting").Where("role >= ?", common.RoleAdminUser).Find(&admins).Error; err != nil {
+		common.SysError("failed to check admin IP log setting: " + err.Error())
+		return false
+	}
+
+	enabled := false
+	for i := range admins {
+		if admins[i].GetSetting().RecordIpLog {
+			enabled = true
+			break
+		}
+	}
+
+	adminRecordIpLogCache.Lock()
+	adminRecordIpLogCache.enabled = enabled
+	adminRecordIpLogCache.expiresAt = now.Add(time.Minute)
+	adminRecordIpLogCache.Unlock()
+	return enabled
+}
+
+func clearAdminRecordIpLogCache() {
+	adminRecordIpLogCache.Lock()
+	adminRecordIpLogCache.expiresAt = time.Time{}
+	adminRecordIpLogCache.Unlock()
+}
+
 func RecordTopupLog(userId int, content string, callerIp string, paymentMethod string, callbackPaymentMethod string) {
 	username, _ := GetUsernameById(userId, false)
 	adminInfo := map[string]interface{}{
@@ -287,12 +338,7 @@ func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string,
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	otherStr := common.MapToJsonStr(other)
 	// 判断是否需要记录 IP
-	needRecordIp := false
-	if settingMap, err := GetUserSetting(userId, false); err == nil {
-		if settingMap.RecordIpLog {
-			needRecordIp = true
-		}
-	}
+	needRecordIp := shouldRecordRequestIP(userId)
 	log := &Log{
 		UserId:           userId,
 		Username:         username,
@@ -351,12 +397,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	createdAt := common.GetTimestamp()
 	otherStr := common.MapToJsonStr(params.Other)
 	// 判断是否需要记录 IP
-	needRecordIp := false
-	if settingMap, err := GetUserSetting(userId, false); err == nil {
-		if settingMap.RecordIpLog {
-			needRecordIp = true
-		}
-	}
+	needRecordIp := shouldRecordRequestIP(userId)
 	log := &Log{
 		UserId:           userId,
 		Username:         username,

@@ -402,7 +402,9 @@ export function NotificationSettingsCard({
             <div className='space-y-0.5'>
               <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
               <p className='text-muted-foreground text-xs'>
-                {t('Log IP address for usage and error logs')}
+                {isAdmin
+                  ? t("Log IP address for every user's usage and error logs")
+                  : t('Log IP address for usage and error logs')}
               </p>
             </div>
             <Switch

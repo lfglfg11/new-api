@@ -2483,6 +2483,7 @@
     "Log Directory": "Каталог журналов",
     "Log File Count": "Кол-во файлов журналов",
     "Log files older than {{value}} days will be deleted.": "Файлы журналов старше {{value}} дней будут удалены.",
+    "Log IP address for every user's usage and error logs": "Записывать IP-адреса в журналах использования и ошибок всех пользователей",
     "Log IP address for usage and error logs": "Записывать IP-адрес для журналов использования и ошибок",
     "Log Maintenance": "Журнал обслуживания",
     "Log Type": "Тип журнала",

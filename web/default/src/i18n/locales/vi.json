@@ -2483,6 +2483,7 @@
     "Log Directory": "Thư mục nhật ký",
     "Log File Count": "Số tệp nhật ký",
     "Log files older than {{value}} days will be deleted.": "Các tệp nhật ký cũ hơn {{value}} ngày sẽ bị xóa.",
+    "Log IP address for every user's usage and error logs": "Ghi lại địa chỉ IP trong nhật ký sử dụng và lỗi của mọi người dùng",
     "Log IP address for usage and error logs": "Ghi lại địa chỉ IP cho nhật ký sử dụng và lỗi",
     "Log Maintenance": "Bảo trì Nhật ký",
     "Log Type": "Loại nhật ký",
