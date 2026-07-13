@@ -332,7 +332,7 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           </p>
         </div>
 
-        {/* 1. Receive Upstream Model Update Notifications (admin only) */}
+        {/* Receive Upstream Model Update Notifications (admin only) */}
         {isAdmin && (
           <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
             <div className='space-y-0.5'>
@@ -356,45 +356,6 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           </div>
         )}
 
-        {/* 2. Accept Unset Model Price (上游新增功能) */}
-        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
-          <div className='space-y-0.5'>
-            <Label htmlFor='acceptUnsetPrice'>
-              {t('Accept Unpriced Models')}
-            </Label>
-            <p className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Allow using models without price configuration')}
-            </p>
-          </div>
-          <Switch
-            id='acceptUnsetPrice'
-            className='shrink-0'
-            checked={settings.accept_unset_model_ratio_model}
-            onCheckedChange={(checked) =>
-              updateField('accept_unset_model_ratio_model', checked)
-            }
-          />
-        </div>
-
-        {/* 3. Record IP Log (您的定制功能 - 100% 保留原有逻辑) */}
-        <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
-          <div className='space-y-0.5'>
-            <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
-            <p className='text-muted-foreground text-xs sm:text-sm'>
-              {isAdmin
-                ? t("Log IP address for every user's usage and error logs")
-                : t('Log IP address for usage and error logs')}
-            </p>
-          </div>
-          <Switch
-            id='recordIp'
-            className='shrink-0'
-            checked={settings.record_ip_log}
-            onCheckedChange={(checked) => updateField('record_ip_log', checked)}
-          />
-        </div>
-      </div>
-
         {/* Accept Unset Model Price */}
         <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
           <div className='space-y-0.5'>
@@ -415,12 +376,14 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           />
         </div>
 
-        {/* Record IP Log */}
+        {/* Record IP Log (hub: admin can record every user's IP) */}
         <div className='flex items-start justify-between gap-3 rounded-lg border p-3 sm:items-center sm:p-4'>
           <div className='space-y-0.5'>
             <Label htmlFor='recordIp'>{t('Record IP Address')}</Label>
             <p className='text-muted-foreground text-xs sm:text-sm'>
-              {t('Log IP address for usage and error logs')}
+              {isAdmin
+                ? t("Log IP address for every user's usage and error logs")
+                : t('Log IP address for usage and error logs')}
             </p>
           </div>
           <Switch
