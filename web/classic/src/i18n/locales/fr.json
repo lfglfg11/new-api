@@ -3699,5 +3699,14 @@
   "商户号 Mch ID": "Merchant ID (Mch ID)",
   "证书序列号": "Certificate serial number",
   "商户私钥路径或内容": "Merchant private key path or PEM",
-  "更新支付设置": "Update payment settings"
+  "更新支付设置": "Update payment settings",
+  "支付宝当面付": "Alipay Face-to-Face",
+  "微信支付": "WeChat Pay",
+  "支付宝当面付设置": "Alipay Face-to-Face Settings",
+  "微信支付设置": "WeChat Pay Settings",
+  "更新支付宝当面付设置": "Update Alipay Face-to-Face settings",
+  "更新微信支付设置": "Update WeChat Pay settings",
+  "未检测到变更": "No changes detected",
+  "易支付设置": "Epay Settings",
+  "更新易支付设置": "Update Epay settings"
 }

@@ -1011,12 +1011,13 @@ export function PaymentSettingsSection({
           />
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
-              <TabsList className='grid min-w-[52rem] grid-cols-7'>
+              <TabsList className='grid min-w-[60rem] grid-cols-8'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
-                <TabsTrigger value='alipay-wxpay'>
-                  {t('Alipay / WeChat')}
+                <TabsTrigger value='alipay'>
+                  {t('Alipay Face-to-Face Pay')}
                 </TabsTrigger>
+                <TabsTrigger value='wxpay'>{t('WeChat Pay')}</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
@@ -1378,196 +1379,193 @@ export function PaymentSettingsSection({
               </div>
             </TabsContent>
 
-            <TabsContent
-              value='alipay-wxpay'
-              className={paymentTabContentClassName}
-            >
-              <div className='space-y-8'>
-                <div className='space-y-4'>
-                  <div>
-                    <h3 className='text-lg font-medium'>
-                      {t('Alipay Face-to-Face Pay')}
-                    </h3>
-                    <p className='text-muted-foreground text-sm'>
-                      {t(
-                        'Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify'
-                      )}
-                    </p>
-                  </div>
-                  <div className='grid gap-6 md:grid-cols-2'>
-                    <FormField
-                      control={form.control}
-                      name='AlipayAppId'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>App ID</FormLabel>
-                          <FormControl>
-                            <Input placeholder='2021...' {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='AlipayPayType'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('Pay type')}</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder='facepay / pagepay / wappay'
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            {t('Default is facepay (当面付)')}
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='AlipayPrivateKey'
-                      render={({ field }) => (
-                        <FormItem className='md:col-span-2'>
-                          <FormLabel>{t('App private key')}</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              rows={4}
-                              placeholder={t('RSA private key')}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='AlipayPublicKey'
-                      render={({ field }) => (
-                        <FormItem className='md:col-span-2'>
-                          <FormLabel>{t('Alipay public key')}</FormLabel>
-                          <FormControl>
-                            <Textarea
-                              rows={4}
-                              placeholder={t('Alipay public key')}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                        <TabsContent value='alipay' className={paymentTabContentClassName}>
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-lg font-medium'>
+                    {t('Alipay Face-to-Face Pay')}
+                  </h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify'
+                    )}
+                  </p>
                 </div>
-
-                <div className='space-y-4'>
-                  <div>
-                    <h3 className='text-lg font-medium'>{t('WeChat Pay')}</h3>
-                    <p className='text-muted-foreground text-sm'>
-                      {t(
-                        'Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.'
-                      )}
-                    </p>
-                  </div>
-                  <div className='grid gap-6 md:grid-cols-2'>
-                    <FormField
-                      control={form.control}
-                      name='WxpayAppId'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>App ID</FormLabel>
-                          <FormControl>
-                            <Input placeholder='wx...' {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='WxpayMchId'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('Merchant ID (Mch ID)')}</FormLabel>
-                          <FormControl>
-                            <Input placeholder='1900000109' {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='WxpayMchCertificateSerialNumber'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {t('Certificate serial number')}
-                          </FormLabel>
-                          <FormControl>
-                            <Input {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='WxpayPayType'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('Pay type')}</FormLabel>
-                          <FormControl>
-                            <Input placeholder='Native' {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='WxpayMchAPIv3Key'
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>APIv3 Key</FormLabel>
-                          <FormControl>
-                            <Input type='password' {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name='WxpayMchPrivateKey'
-                      render={({ field }) => (
-                        <FormItem className='md:col-span-2'>
-                          <FormLabel>
-                            {t('Merchant private key path or PEM')}
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              rows={4}
-                              placeholder={t(
-                                'PEM content or path like /data/apiclient_key.pem'
-                              )}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='AlipayAppId'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>App ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder='2021...' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='AlipayPayType'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Pay type')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder='facepay / pagepay / wappay'
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Default is facepay (当面付)')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='AlipayPrivateKey'
+                    render={({ field }) => (
+                      <FormItem className='md:col-span-2'>
+                        <FormLabel>{t('App private key')}</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            rows={4}
+                            placeholder={t('RSA private key')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='AlipayPublicKey'
+                    render={({ field }) => (
+                      <FormItem className='md:col-span-2'>
+                        <FormLabel>{t('Alipay public key')}</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            rows={4}
+                            placeholder={t('Alipay public key')}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
             </TabsContent>
 
-            <TabsContent value='stripe' className={paymentTabContentClassName}>
+            <TabsContent value='wxpay' className={paymentTabContentClassName}>
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-lg font-medium'>{t('WeChat Pay')}</h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.'
+                    )}
+                  </p>
+                </div>
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='WxpayAppId'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>App ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder='wx...' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='WxpayMchId'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Merchant ID (Mch ID)')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder='1900000109' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='WxpayMchCertificateSerialNumber'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {t('Certificate serial number')}
+                        </FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='WxpayPayType'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Pay type')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder='Native' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='WxpayMchAPIv3Key'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>APIv3 Key</FormLabel>
+                        <FormControl>
+                          <Input type='password' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='WxpayMchPrivateKey'
+                    render={({ field }) => (
+                      <FormItem className='md:col-span-2'>
+                        <FormLabel>
+                          {t('Merchant private key path or PEM')}
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            rows={4}
+                            placeholder={t(
+                              'PEM content or path like /data/apiclient_key.pem'
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+<TabsContent value='stripe' className={paymentTabContentClassName}>
               <div className='space-y-4'>
                 <div>
                   <h3 className='text-lg font-medium'>{t('Stripe Gateway')}</h3>
