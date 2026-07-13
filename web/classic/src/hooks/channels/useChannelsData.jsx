@@ -443,51 +443,101 @@ export const useChannelsData = () => {
   const manageChannel = async (id, action, record, value) => {
     let data = { id };
     let res;
-    switch (action) {
-      case 'delete':
-        res = await API.delete(`/api/channel/${id}/`);
-        break;
-      case 'enable':
-        // Status updates moved to dedicated endpoint; PUT /api/channel rejects status.
-        res = await API.post(`/api/channel/${id}/status`, { status: 1 });
-        break;
-      case 'disable':
-        res = await API.post(`/api/channel/${id}/status`, { status: 2 });
-        break;
-      case 'priority':
-        if (value === '') return;
-        data.priority = parseInt(value);
-        res = await API.put('/api/channel/', data);
-        break;
-      case 'weight':
-        if (value === '') return;
-        data.weight = parseInt(value);
-        if (data.weight < 0) data.weight = 0;
-        res = await API.put('/api/channel/', data);
-        break;
-      case 'enable_all':
-        data.channel_info = record.channel_info;
-        data.channel_info.multi_key_status_list = {};
-        res = await API.put('/api/channel/', data);
-        break;
-    }
-    const { success, message } = res.data;
-    if (success) {
-      showSuccess(t('操作成功完成！'));
-      let newChannels = [...channels];
-      if (action === 'enable') {
-        record.status = 1;
-      } else if (action === 'disable') {
-        record.status = 2;
-      } else if (action !== 'delete') {
-        const channel = res.data.data;
-        if (channel && typeof channel === 'object' && channel.status !== undefined) {
-          record.status = channel.status;
+    const channelId = Number(id);
+    try {
+      switch (action) {
+        case 'delete':
+          res = await API.delete(`/api/channel/${channelId}`);
+          break;
+        case 'enable':
+        case 'disable': {
+          // Upstream rejects status on PUT /api/channel; use dedicated status API.
+          if (!Number.isFinite(channelId) || channelId <= 0) {
+            showError(t('无效的参数'));
+            return;
+          }
+          const nextStatus = action === 'enable' ? 1 : 2;
+          res = await API.post(
+            `/api/channel/${channelId}/status`,
+            JSON.stringify({ status: nextStatus }),
+            {
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            },
+          );
+          break;
         }
+        case 'priority':
+          if (value === '') return;
+          data.priority = parseInt(value);
+          res = await API.put('/api/channel/', data);
+          break;
+        case 'weight':
+          if (value === '') return;
+          data.weight = parseInt(value);
+          if (data.weight < 0) data.weight = 0;
+          res = await API.put('/api/channel/', data);
+          break;
+        case 'enable_all':
+          data.channel_info = record.channel_info;
+          data.channel_info.multi_key_status_list = {};
+          res = await API.put('/api/channel/', data);
+          break;
+        default:
+          return;
       }
-      setChannels(newChannels);
-    } else {
-      showError(message);
+      const { success, message } = res?.data || {};
+      if (success) {
+        showSuccess(t('操作成功完成！'));
+        if (action === 'delete') {
+          await refresh();
+          return;
+        }
+        if (action === 'enable' || action === 'disable') {
+          const nextStatus = action === 'enable' ? 1 : 2;
+          setChannels((prev) =>
+            prev.map((ch) => {
+              if (Array.isArray(ch.children)) {
+                return {
+                  ...ch,
+                  children: ch.children.map((child) =>
+                    Number(child.id) === channelId
+                      ? { ...child, status: nextStatus }
+                      : child,
+                  ),
+                };
+              }
+              return Number(ch.id) === channelId
+                ? { ...ch, status: nextStatus }
+                : ch;
+            }),
+          );
+          await refresh();
+          return;
+        }
+        const channel = res.data.data;
+        if (
+          channel &&
+          typeof channel === 'object' &&
+          channel.status !== undefined
+        ) {
+          setChannels((prev) =>
+            prev.map((ch) =>
+              Number(ch.id) === channelId
+                ? { ...ch, status: channel.status }
+                : ch,
+            ),
+          );
+        }
+      } else {
+        showError(message || t('操作失败'));
+      }
+    } catch (error) {
+      // Global axios interceptor already toasts HTTP errors.
+      if (!error?.response) {
+        showError(error);
+      }
     }
   };
 

@@ -709,28 +709,23 @@ func UpdateChannelStatus(channelId int, usingKey string, status int, reason stri
 		defer channelStatusLock.Unlock()
 
 		channelCache, _ := CacheGetChannel(channelId)
-		if channelCache == nil {
-			return false
-		}
-		if channelCache.ChannelInfo.IsMultiKey {
-			// Use per-channel lock to prevent concurrent map read/write with GetNextEnabledKey
-			beforeStatus := channelCache.Status
-			pollingLock := GetChannelPollingLock(channelId)
-			pollingLock.Lock()
-			// 如果是多Key模式，更新缓存中的状态
-			handlerMultiKeyUpdate(channelCache, usingKey, status, reason)
-			pollingLock.Unlock()
-			if beforeStatus != channelCache.Status {
-				CacheUpdateChannelStatus(channelId, channelCache.Status)
-			}
-			//CacheUpdateChannel(channelCache)
-			//return true
-		} else {
-			// 如果缓存渠道存在，且状态已是目标状态，直接返回
-			if channelCache.Status == status {
+		if channelCache != nil {
+			if channelCache.ChannelInfo.IsMultiKey {
+				// Use per-channel lock to prevent concurrent map read/write with GetNextEnabledKey
+				beforeStatus := channelCache.Status
+				pollingLock := GetChannelPollingLock(channelId)
+				pollingLock.Lock()
+				handlerMultiKeyUpdate(channelCache, usingKey, status, reason)
+				pollingLock.Unlock()
+				if beforeStatus != channelCache.Status {
+					CacheUpdateChannelStatus(channelId, channelCache.Status)
+				}
+			} else if channelCache.Status == status {
+				// Cache hit and already at target status; no DB write needed.
 				return false
+			} else {
+				CacheUpdateChannelStatus(channelId, status)
 			}
-			CacheUpdateChannelStatus(channelId, status)
 		}
 	}
 

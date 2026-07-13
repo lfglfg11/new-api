@@ -929,6 +929,39 @@ func UpdateChannel(c *gin.Context) {
 		return
 	}
 	if _, ok := requestData["status"]; ok {
+		// Compatibility for classic UI: status-only payloads used to go through PUT /api/channel.
+		// Keep dedicated POST /:id/status as the primary path, but accept status-only PUT too.
+		if isChannelStatusOnlyPayload(requestData) {
+			statusNumber, statusOK := parseChannelStatusValue(requestData["status"])
+			if !statusOK || !isManageableChannelStatus(statusNumber) {
+				common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+				return
+			}
+			if !authz.Can(c.GetInt("id"), c.GetInt("role"), authz.ChannelOperate) {
+				common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+				return
+			}
+			changed := model.UpdateChannelStatus(channel.Id, "", statusNumber, "manual operation")
+			if changed {
+				model.InitChannelCache()
+				service.ResetProxyClientCache()
+			}
+			recordManageAudit(c, "channel.status_update", map[string]interface{}{
+				"id":      channel.Id,
+				"status":  statusNumber,
+				"changed": changed,
+				"via":     "put_compat",
+			})
+			c.JSON(http.StatusOK, gin.H{
+				"success": true,
+				"message": "",
+				"data": gin.H{
+					"id":     channel.Id,
+					"status": statusNumber,
+				},
+			})
+			return
+		}
 		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
 		return
 	}
@@ -1092,9 +1125,18 @@ func UpdateChannelStatus(c *gin.Context) {
 		return
 	}
 	req := ChannelStatusRequest{}
-	if err := c.ShouldBindJSON(&req); err != nil || !isManageableChannelStatus(req.Status) {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return
+	// Parse with project JSON helper so binding does not depend on Content-Type quirks.
+	if err := common.UnmarshalBodyReusable(c, &req); err != nil || !isManageableChannelStatus(req.Status) {
+		// Fallback: force JSON parse even when Content-Type is missing/non-json.
+		if storage, storageErr := common.GetBodyStorage(c); storageErr == nil {
+			if raw, rawErr := storage.Bytes(); rawErr == nil && len(raw) > 0 {
+				_ = common.Unmarshal(raw, &req)
+			}
+		}
+		if !isManageableChannelStatus(req.Status) {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
 	}
 	changed := model.UpdateChannelStatus(id, "", req.Status, "manual operation")
 	if changed {
@@ -1115,9 +1157,16 @@ func UpdateChannelStatus(c *gin.Context) {
 
 func BatchUpdateChannelStatus(c *gin.Context) {
 	req := ChannelStatusBatchRequest{}
-	if err := c.ShouldBindJSON(&req); err != nil || len(req.Ids) == 0 || !isManageableChannelStatus(req.Status) {
-		common.ApiErrorI18n(c, i18n.MsgInvalidParams)
-		return
+	if err := common.UnmarshalBodyReusable(c, &req); err != nil || len(req.Ids) == 0 || !isManageableChannelStatus(req.Status) {
+		if storage, storageErr := common.GetBodyStorage(c); storageErr == nil {
+			if raw, rawErr := storage.Bytes(); rawErr == nil && len(raw) > 0 {
+				_ = common.Unmarshal(raw, &req)
+			}
+		}
+		if len(req.Ids) == 0 || !isManageableChannelStatus(req.Status) {
+			common.ApiErrorI18n(c, i18n.MsgInvalidParams)
+			return
+		}
 	}
 	changedCount := 0
 	for _, id := range req.Ids {
@@ -1139,6 +1188,50 @@ func BatchUpdateChannelStatus(c *gin.Context) {
 		"message": "",
 		"data":    changedCount,
 	})
+}
+
+
+func isChannelStatusOnlyPayload(requestData map[string]any) bool {
+	allowed := map[string]struct{}{
+		"id":     {},
+		"status": {},
+	}
+	for key := range requestData {
+		if _, ok := allowed[key]; !ok {
+			return false
+		}
+	}
+	_, hasStatus := requestData["status"]
+	return hasStatus
+}
+
+func parseChannelStatusValue(value any) (int, bool) {
+	switch v := value.(type) {
+	case float64:
+		return int(v), true
+	case float32:
+		return int(v), true
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	case json.Number:
+		i, err := v.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return int(i), true
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return 0, false
+		}
+		return i, true
+	default:
+		return 0, false
+	}
 }
 
 func isManageableChannelStatus(status int) bool {
