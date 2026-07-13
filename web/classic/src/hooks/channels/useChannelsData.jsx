@@ -448,12 +448,11 @@ export const useChannelsData = () => {
         res = await API.delete(`/api/channel/${id}/`);
         break;
       case 'enable':
-        data.status = 1;
-        res = await API.put('/api/channel/', data);
+        // Status updates moved to dedicated endpoint; PUT /api/channel rejects status.
+        res = await API.post(`/api/channel/${id}/status`, { status: 1 });
         break;
       case 'disable':
-        data.status = 2;
-        res = await API.put('/api/channel/', data);
+        res = await API.post(`/api/channel/${id}/status`, { status: 2 });
         break;
       case 'priority':
         if (value === '') return;
@@ -475,10 +474,16 @@ export const useChannelsData = () => {
     const { success, message } = res.data;
     if (success) {
       showSuccess(t('操作成功完成！'));
-      let channel = res.data.data;
       let newChannels = [...channels];
-      if (action !== 'delete') {
-        record.status = channel.status;
+      if (action === 'enable') {
+        record.status = 1;
+      } else if (action === 'disable') {
+        record.status = 2;
+      } else if (action !== 'delete') {
+        const channel = res.data.data;
+        if (channel && typeof channel === 'object' && channel.status !== undefined) {
+          record.status = channel.status;
+        }
       }
       setChannels(newChannels);
     } else {
