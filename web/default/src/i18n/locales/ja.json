@@ -2025,7 +2025,7 @@
     "footer.columns.related.links.oneApi": "1つのAPI",
     "footer.columns.related.title": "関連プロジェクト",
     "footer.defaultCopyright": "すべての権利を留保します。",
-    "footer.new\u0061pi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
+    "footer.newapi.projectAttributionSuffix": "すべての権利を留保します。プロジェクトコントリビューターにより設計・開発されています。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "2025 年 5 月 10 日以降に追加されたチャネルの場合、デプロイ時にモデル名から「.」を削除する必要はありません",
     "For private deployments, format: https://fastgpt.run/api/openapi": "プライベートデプロイメントの場合、形式: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "構文的に有効な JSON 応答を強制",
@@ -5180,5 +5180,19 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
     "Zoom": "ズーム"
-  }
+  },
+  "Alipay / WeChat": "Alipay / WeChat",
+  "Alipay Face-to-Face Pay": "Alipay対面決済",
+  "Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify": "Alipay公式ゲートウェイ（facepay / pagepay / wappay）。通知URL：/api/alipay/notify",
+  "Pay type": "支払い方式",
+  "Default is facepay (当面付)": "デフォルトは facepay",
+  "App private key": "アプリ秘密鍵",
+  "RSA private key": "RSA秘密鍵",
+  "Alipay public key": "Alipay公開鍵",
+  "WeChat Pay": "WeChat Pay",
+  "Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.": "WeChat Pay Native QR。通知URL：/api/wxpay/notify。",
+  "Merchant ID (Mch ID)": "加盟店ID (Mch ID)",
+  "Certificate serial number": "証明書シリアル番号",
+  "Merchant private key path or PEM": "加盟店秘密鍵のパスまたはPEM",
+  "PEM content or path like /data/apiclient_key.pem": "PEM内容またはパス（例：/data/apiclient_key.pem）"
 }

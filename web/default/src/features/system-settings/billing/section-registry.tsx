@@ -140,6 +140,8 @@ const BILLING_SECTIONS = [
           MinTopUp: settings.MinTopUp,
           CustomCallbackAddress: settings.CustomCallbackAddress,
           PayMethods: settings.PayMethods,
+          AlipayConfig: settings.AlipayConfig ?? '',
+          WxpayConfig: settings.WxpayConfig ?? '',
           AmountOptions: settings['payment_setting.amount_options'],
           AmountDiscount: settings['payment_setting.amount_discount'],
           StripeApiSecret: settings.StripeApiSecret,

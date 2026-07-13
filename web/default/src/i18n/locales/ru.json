@@ -2025,7 +2025,7 @@
     "footer.columns.related.links.oneApi": "Один API",
     "footer.columns.related.title": "Связанные проекты",
     "footer.defaultCopyright": "Все права защищены.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
+    "footer.newapi.projectAttributionSuffix": "Все права защищены. Разработано участниками проекта.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "Для каналов, добавленных после 10 мая 2025 г., не нужно удалять \".\" из имён моделей при развёртывании",
     "For private deployments, format: https://fastgpt.run/api/openapi": "Для частных развертываний, формат: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Принудительно возвращать синтаксически корректный JSON",
@@ -5180,5 +5180,19 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom"
-  }
+  },
+  "Alipay / WeChat": "Alipay / WeChat",
+  "Alipay Face-to-Face Pay": "Alipay Face-to-Face",
+  "Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify": "Официальный шлюз Alipay (facepay / pagepay / wappay). Notify URL: /api/alipay/notify",
+  "Pay type": "Тип оплаты",
+  "Default is facepay (当面付)": "По умолчанию facepay",
+  "App private key": "Приватный ключ приложения",
+  "RSA private key": "RSA приватный ключ",
+  "Alipay public key": "Публичный ключ Alipay",
+  "WeChat Pay": "WeChat Pay",
+  "Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.": "WeChat Pay Native QR. Notify URL: /api/wxpay/notify.",
+  "Merchant ID (Mch ID)": "ID мерчанта (Mch ID)",
+  "Certificate serial number": "Серийный номер сертификата",
+  "Merchant private key path or PEM": "Путь или PEM приватного ключа мерчанта",
+  "PEM content or path like /data/apiclient_key.pem": "PEM или путь, например /data/apiclient_key.pem"
 }

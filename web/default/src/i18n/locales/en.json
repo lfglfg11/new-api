@@ -2025,7 +2025,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Related Projects",
     "footer.defaultCopyright": "All rights reserved.",
-    "footer.new\u0061pi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
+    "footer.newapi.projectAttributionSuffix": "All rights reserved. Designed and developed by the project contributors.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment",
     "For private deployments, format: https://fastgpt.run/api/openapi": "For private deployments, format: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Force a syntactically valid JSON response",
@@ -5180,5 +5180,19 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom"
-  }
+  },
+  "Alipay / WeChat": "Alipay / WeChat",
+  "Alipay Face-to-Face Pay": "Alipay Face-to-Face Pay",
+  "Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify": "Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify",
+  "Pay type": "Pay type",
+  "Default is facepay (当面付)": "Default is facepay (当面付)",
+  "App private key": "App private key",
+  "RSA private key": "RSA private key",
+  "Alipay public key": "Alipay public key",
+  "WeChat Pay": "WeChat Pay",
+  "Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.": "Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.",
+  "Merchant ID (Mch ID)": "Merchant ID (Mch ID)",
+  "Certificate serial number": "Certificate serial number",
+  "Merchant private key path or PEM": "Merchant private key path or PEM",
+  "PEM content or path like /data/apiclient_key.pem": "PEM content or path like /data/apiclient_key.pem"
 }

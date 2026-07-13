@@ -2025,7 +2025,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "相關項目",
     "footer.defaultCopyright": "版權所有。",
-    "footer.new\u0061pi.projectAttributionSuffix": "版權所有，由項目貢獻者設計與開發。",
+    "footer.newapi.projectAttributionSuffix": "版權所有，由項目貢獻者設計與開發。",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "對於 2025 年 5 月 10 日之後新增的渠道，在部署時無需從模型名稱中移除 \".\"",
     "For private deployments, format: https://fastgpt.run/api/openapi": "對於私有部署，格式為：https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "強制返回語法合法的 JSON",
@@ -5180,5 +5180,19 @@
     "Zhipu": "智譜",
     "Zhipu V4": "智譜 V4",
     "Zoom": "縮放"
-  }
+  },
+  "Alipay / WeChat": "支付寶 / 微信",
+  "Alipay Face-to-Face Pay": "支付寶当面付",
+  "Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify": "支付寶官方閘道（facepay / pagepay / wappay）。回調地址：/api/alipay/notify",
+  "Pay type": "支付方式",
+  "Default is facepay (当面付)": "預設為 facepay（当面付）",
+  "App private key": "應用私鑰",
+  "RSA private key": "RSA 私鑰",
+  "Alipay public key": "支付寶公鑰",
+  "WeChat Pay": "微信支付",
+  "Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.": "微信官方 Native 掃碼支付。回調地址：/api/wxpay/notify。商戶私鑰可填 PEM 內容或伺服器金鑰檔路徑。",
+  "Merchant ID (Mch ID)": "商戶號 (Mch ID)",
+  "Certificate serial number": "憑證序號",
+  "Merchant private key path or PEM": "商戶私鑰路徑或 PEM",
+  "PEM content or path like /data/apiclient_key.pem": "PEM 內容或路徑，例如 /data/apiclient_key.pem"
 }

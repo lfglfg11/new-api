@@ -44,6 +44,8 @@ const PaymentSetting = () => {
     PayMethods: '',
     AmountOptions: '',
     AmountDiscount: '',
+    AlipayConfig: '',
+    WxpayConfig: '',
 
     StripeApiSecret: '',
     StripeWebhookSecret: '',
@@ -275,7 +277,7 @@ const PaymentSetting = () => {
                   hideSectionTitle
                 />
               </Tabs.TabPane>
-              <Tabs.TabPane tab={t('易支付设置')} itemKey='epay'>
+              <Tabs.TabPane tab={t('Epay / Alipay / WeChat')} itemKey='epay'>
                 <SettingsPaymentGateway
                   options={inputs}
                   refresh={onRefresh}

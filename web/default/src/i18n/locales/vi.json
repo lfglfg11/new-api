@@ -2025,7 +2025,7 @@
     "footer.columns.related.links.oneApi": "One API",
     "footer.columns.related.title": "Các Dự Án Liên Quan",
     "footer.defaultCopyright": "Bản quyền được bảo lưu.",
-    "footer.new\u0061pi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
+    "footer.newapi.projectAttributionSuffix": "Bản quyền được bảo lưu. Được thiết kế và phát triển bởi các cộng tác viên dự án.",
     "For channels added after May 10, 2025, no need to remove \".\" from model names during deployment": "Đối với các kênh được thêm sau ngày 10 tháng 5 năm 2025, không cần loại bỏ \".\" khỏi tên mô hình trong quá trình triển khai",
     "For private deployments, format: https://fastgpt.run/api/openapi": "Đối với các triển khai riêng tư, định dạng: https://fastgpt.run/api/openapi",
     "Force a syntactically valid JSON response": "Buộc phản hồi JSON hợp lệ về cú pháp",
@@ -5180,5 +5180,19 @@
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
     "Zoom": "Zoom"
-  }
+  },
+  "Alipay / WeChat": "Alipay / WeChat",
+  "Alipay Face-to-Face Pay": "Alipay Face-to-Face",
+  "Official Alipay gateway (facepay / pagepay / wappay). Notify URL: /api/alipay/notify": "Cổng Alipay chính thức (facepay / pagepay / wappay). URL thông báo: /api/alipay/notify",
+  "Pay type": "Loại thanh toán",
+  "Default is facepay (当面付)": "Mặc định là facepay",
+  "App private key": "Khóa riêng ứng dụng",
+  "RSA private key": "Khóa riêng RSA",
+  "Alipay public key": "Khóa công khai Alipay",
+  "WeChat Pay": "WeChat Pay",
+  "Official WeChat Pay Native QR mode. Notify URL: /api/wxpay/notify. Merchant private key can be PEM content or a server file path.": "WeChat Pay Native QR. URL thông báo: /api/wxpay/notify.",
+  "Merchant ID (Mch ID)": "Mã merchant (Mch ID)",
+  "Certificate serial number": "Số sê-ri chứng chỉ",
+  "Merchant private key path or PEM": "Đường dẫn hoặc PEM khóa riêng merchant",
+  "PEM content or path like /data/apiclient_key.pem": "Nội dung PEM hoặc đường dẫn, ví dụ /data/apiclient_key.pem"
 }
