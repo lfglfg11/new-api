@@ -64,6 +64,11 @@ web/           — Frontend (React 19, Rsbuild, Base UI, Tailwind)
 
 ### Backend Rules
 
+**relaykit module independence:** The `relaykit/` Go module MUST remain independently buildable.
+
+- Code under `relaykit/` MUST NOT import or depend on packages from the root `new-api` module, or rely on root-only configuration, generated files, or workspace wiring.
+- Any change affecting `relaykit/` or its public APIs MUST be verified with `cd relaykit && GOWORK=off go build ./...`; a successful root-module build is not sufficient.
+
 **JSON package:** All JSON marshal/unmarshal operations MUST use the wrapper functions in `common/json.go`:
 
 - `common.Marshal(v any) ([]byte, error)`
@@ -134,6 +139,13 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 - Follow `web/AGENTS.md` for detailed frontend conventions, including TypeScript, component structure, styling, accessibility, testing, and build checks.
 
 ### Project Governance
+
+**Customization documentation:** Any downstream customization made on `hub`, `hub0`, or `hub-merge-upstream`—including backend/frontend code, configuration, workflows, compatibility behavior, or conflict-resolution decisions—MUST update both of these files in the same change set:
+
+- Root `log.md`: record the date, what changed, why it changed, key paths, and validation results.
+- `docs/CUSTOMIZATIONS.md`: record the long-term business invariant, upstream-conflict preservation strategy, current implementation paths, and repeatable acceptance checks.
+
+Upstream synchronization work MUST also record the upstream/downstream baseline commits and the result of preserving each customization. These downstream records MUST NOT be added to the pure-upstream `main` branch.
 
 **Protected project information:** The following project-related information is strictly protected and MUST NOT be modified, deleted, replaced, or removed under any circumstances:
 

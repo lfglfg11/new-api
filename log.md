@@ -34,3 +34,14 @@
 - **修复验证**：执行 `go test ./middleware/...` 编译通过。
 - **无效令牌兼容补齐**：`TokenAuthReadOnly` 改为复用 `splitTokenKeyParts` 并执行 48 位截断，避免迁移令牌在只读鉴权路径被误判为无效。
 - **hub0 对齐**：`model/token.go` 的 `ValidateUserToken` 截断逻辑恢复为 `len(key) > 48` 后 `key[:48]` 的原始写法。
+
+## 2026-08-24
+- **上游同步基线**：在中间分支 `hub-merge-upstream` 先保留 `hub@9d3be0d9a`，再合并 `main/upstream-main@2d8e50bf3`；本轮只提交中间分支，未合回 `hub`、未推送远端。
+- **本地文件清理**：删除未跟踪的本机虚拟主机文件 `.codex-newapi-vhost.conf`，避免误纳入版本库。
+- **Classic / 老 UI 长期保留**：拒绝上游删除 Classic UI 的行为，完整保留 `web/classic/`、Classic 支付与渠道状态操作、多语言资源、`main.go` 双 embed、`router/web-router.go` theme 路由以及 `Dockerfile` 双前端构建链路。
+- **Classic workspace 修复**：上游已删除旧 `web/default/package.json`，因此把 `web/package.workspace.json` 从 `default + classic` 改为仅声明 `classic`，并重新生成 `web/bun.lock.workspace`；`bun install --filter ./classic --frozen-lockfile` 验证无锁文件漂移。
+- **核心冲突决策**：`main.go` 同时吸收上游 relaykit 日志和 trusted proxies 初始化；`model/channel.go` 采用上游加锁与字段白名单状态持久化并保留缓存 miss 落库；`relay/channel/openai/relay-openai.go` 适配上游流扫描 API 后继续阻止 SSE 错误进入成功 usage/结算；`service/task_polling.go` 保留上游 CAS/退款语义并恢复二开批量遍历和并行轮询。
+- **异步任务并行修复**：恢复跨渠道并行和同渠道逐任务并行；每个任务通过 adaptor factory 获取独立 adaptor，并使用独立 `RelayInfo`，同时等待已启动任务结束并尊重 context 取消。相关路径：`service/task_polling.go`、`service/task_polling_test.go`。
+- **Classic 契约测试对齐**：将上游“Classic 已移除”的断言改为二开真实契约，验证 `theme.frontend=classic` 可保存，且 `/api/status` 会发布选中的 Classic theme。相关路径：`controller/theme_compat_test.go`。
+- **二开文档强制规则**：新增 `docs/CUSTOMIZATIONS.md`，并在根目录 `AGENTS.md` 规定：今后 `hub`、`hub0`、`hub-merge-upstream` 的任何二开代码、配置、前端、工作流、兼容或冲突决策，都必须在同一批变更中同步更新 `log.md` 与 `docs/CUSTOMIZATIONS.md`；纯上游 `main` 不写二开记录。
+- **验证结果**：`go test ./model ./router ./service ./relay/channel/openai`、`go test ./controller -count=1`、`go build ./...`、`cd relaykit; GOWORK=off go build ./...` 均通过；OpenAI SSE、任务并行定向回归测试通过；新 UI `bun run build` 与 Classic UI `bun run build` 均通过。完整 `go test ./...` 最终通过。

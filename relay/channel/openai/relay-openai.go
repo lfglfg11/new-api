@@ -8,14 +8,14 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/relay/channel/openrouter"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
+	"github.com/QuantumNous/new-api/relaykit/dto"
+	"github.com/QuantumNous/new-api/relaykit/relayconvert"
+	"github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/service/relayconvert"
-	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -120,11 +120,31 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var lastStreamData string
 	var secondLastStreamData string // 存储倒数第二个stream data，用于音频模型
 	var streamErr *types.NewAPIError
+	seenStreamToolCalls := make(map[string]struct{})
+	var streamFunctionCallNames []string
 
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
+		if len(data) > 0 {
+			var streamResp dto.SimpleResponse
+			if err := common.UnmarshalJsonStr(data, &streamResp); err == nil {
+				if oaiErr := streamResp.GetOpenAIError(); oaiErr != nil && oaiErr.Type != "" {
+					if writeErr := helper.StringData(c, data); writeErr != nil {
+						logger.LogError(c, "failed to write stream error chunk: "+writeErr.Error())
+					}
+					statusCode := resp.StatusCode
+					if statusCode == http.StatusOK {
+						statusCode = http.StatusBadRequest
+					}
+					streamErr = types.WithOpenAIError(*oaiErr, statusCode)
+					sr.Stop(streamErr)
+					return
+				}
+			}
+		}
+
 		if lastStreamData != "" {
 			if err := HandleStreamFormat(c, info, lastStreamData, info.ChannelSetting.ForceFormat, info.ChannelSetting.ThinkingToContent); err != nil {
 				common.SysLog("error handling stream format: " + err.Error())
@@ -138,6 +158,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 
 			lastStreamData = data
+			collectStreamFunctionCallNames(data, seenStreamToolCalls, &streamFunctionCallNames)
 			if err := processTokenData(info.RelayMode, data, &responseTextBuilder, &toolCount); err != nil {
 				logger.LogError(c, "error processing stream token data: "+err.Error())
 				sr.Error(err)
@@ -187,9 +208,38 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 
 	applyUsagePostProcessing(info, usage, common.StringToByteSlice(lastStreamData))
 
+	for _, name := range streamFunctionCallNames {
+		info.CountBillableToolCall(dto.BuildInCallFunctionCall, name)
+	}
+
 	HandleFinalResponse(c, info, lastStreamData, responseId, createAt, model, systemFingerprint, usage, containStreamUsage)
 
 	return usage, nil
+}
+
+func collectStreamFunctionCallNames(data string, seen map[string]struct{}, names *[]string) {
+	var streamResponse dto.ChatCompletionsStreamResponse
+	if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
+		return
+	}
+	for _, choice := range streamResponse.Choices {
+		for i, tc := range choice.Delta.ToolCalls {
+			name := tc.Function.Name
+			if name == "" {
+				continue
+			}
+			toolIdx := i
+			if tc.Index != nil {
+				toolIdx = *tc.Index
+			}
+			key := fmt.Sprintf("%d-%d", choice.Index, toolIdx)
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			*names = append(*names, name)
+		}
+	}
 }
 
 func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) (*dto.Usage, *types.NewAPIError) {
@@ -230,6 +280,12 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		if choice.FinishReason == constant.FinishReasonContentFilter {
 			common.SetContextKey(c, constant.ContextKeyAdminRejectReason, "openai_finish_reason=content_filter")
 			break
+		}
+	}
+
+	for _, choice := range simpleResponse.Choices {
+		for _, tc := range choice.Message.ParseToolCalls() {
+			info.CountBillableToolCall(dto.BuildInCallFunctionCall, tc.Function.Name)
 		}
 	}
 
