@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
+import { matchesPricingQuotaType } from '../../helpers';
 
 // 工具函数：将 tags 字符串转为小写去重数组
 const normalizeTags = (tags = '') =>
@@ -57,7 +58,7 @@ export const usePricingFilterCounts = ({
 
     // 计费类型
     if (!ignore.includes('quota') && filterQuotaType !== 'all') {
-      if (model.quota_type !== filterQuotaType) return false;
+      if (!matchesPricingQuotaType(model, filterQuotaType)) return false;
     }
 
     // 端点类型
@@ -88,15 +89,12 @@ export const usePricingFilterCounts = ({
     if (!ignore.includes('search') && searchValue) {
       const term = searchValue.toLowerCase();
       const tags = model.tags ? model.tags.toLowerCase() : '';
-      if (
-        !(
-          model.model_name.toLowerCase().includes(term) ||
-          (model.description &&
-            model.description.toLowerCase().includes(term)) ||
-          tags.includes(term) ||
-          (model.vendor_name && model.vendor_name.toLowerCase().includes(term))
-        )
-      )
+      if (!(
+        model.model_name.toLowerCase().includes(term) ||
+        (model.description && model.description.toLowerCase().includes(term)) ||
+        tags.includes(term) ||
+        (model.vendor_name && model.vendor_name.toLowerCase().includes(term))
+      ))
         return false;
     }
 

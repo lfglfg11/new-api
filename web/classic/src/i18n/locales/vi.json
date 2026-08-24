@@ -4218,7 +4218,12 @@
     "默认折叠侧边栏": "Mặc định thu gọn thanh bên",
     "默认测试模型": "Mô hình kiểm tra mặc định",
     "默认用户消息": "Xin chào",
-    "默认补全倍率": "Tỷ lệ hoàn thành mặc định"
+    "默认补全倍率": "Tỷ lệ hoàn thành mặc định",
+    "$/秒": "$/giây",
+    "按秒计费": "Tính phí theo giây",
+    "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "Nhập giá trực tiếp cho hình thức tính theo mức dùng, theo lượt hoặc theo giây. Nếu giá phụ thuộc vào tham số hay header của yêu cầu, hãy dùng biểu thức/bậc giá.",
+    "输入每秒价格": "Nhập giá mỗi giây",
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Phù hợp với các mô hình bất đồng bộ như /v1/videos tính phí theo số giây được tạo."
   },
   "Epay / Alipay / WeChat": "Epay / Alipay / WeChat",
   "易支付/支付宝/微信": "Epay / Alipay / WeChat",

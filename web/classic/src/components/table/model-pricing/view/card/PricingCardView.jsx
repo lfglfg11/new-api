@@ -40,6 +40,7 @@ import {
   formatPriceInfo,
   formatDynamicPriceSummary,
   getLobeHubIcon,
+  isPerSecondBilling,
 } from '../../../../../helpers';
 import PricingCardSkeleton from './PricingCardSkeleton';
 import { useMinimumLoadingTime } from '../../../../../hooks/common/useMinimumLoadingTime';
@@ -161,9 +162,15 @@ const PricingCardView = ({
       </Tag>
     );
     if (record.quota_type === 1) {
+      const perSecond = isPerSecondBilling(record);
       billingTag = (
-        <Tag key='billing' shape='circle' color='teal' size='small'>
-          {t('按次计费')}
+        <Tag
+          key='billing'
+          shape='circle'
+          color={perSecond ? 'cyan' : 'teal'}
+          size='small'
+        >
+          {perSecond ? t('按秒计费') : t('按次计费')}
         </Tag>
       );
     } else if (record.quota_type === 0) {
@@ -268,11 +275,13 @@ const PricingCardView = ({
                         {model.model_name}
                       </h3>
                       <div className='flex flex-col gap-1 text-xs mt-1'>
-                        {priceData.isDynamicPricing ? (
-                          formatDynamicPriceSummary(priceData.billingExpr, t, priceData.usedGroupRatio)
-                        ) : (
-                          formatPriceInfo(priceData, t, siteDisplayType)
-                        )}
+                        {priceData.isDynamicPricing
+                          ? formatDynamicPriceSummary(
+                              priceData.billingExpr,
+                              t,
+                              priceData.usedGroupRatio,
+                            )
+                          : formatPriceInfo(priceData, t, siteDisplayType)}
                       </div>
                     </div>
                   </div>

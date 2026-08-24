@@ -161,7 +161,12 @@ const buildModelState = (name, sourceMaps) => {
   return {
     ...EMPTY_MODEL,
     name,
-    billingMode: hasValue(fixedPrice) ? 'per-request' : 'per-token',
+    billingMode:
+      billingMode === 'per_second'
+        ? 'per-second'
+        : billingMode === 'per_request' || hasValue(fixedPrice)
+          ? 'per-request'
+          : 'per-token',
     fixedPrice,
     inputPrice,
     completionRatioLocked: completionRatioMeta.locked,
@@ -225,7 +230,8 @@ const buildModelState = (name, sourceMaps) => {
 
 export const isBasePricingUnset = (model) =>
   model.billingMode !== 'tiered_expr' &&
-  !hasValue(model.fixedPrice) && !hasValue(model.inputPrice);
+  !hasValue(model.fixedPrice) &&
+  !hasValue(model.inputPrice);
 
 export const getModelWarnings = (model, t) => {
   if (!model) {
@@ -291,8 +297,8 @@ export const getModelWarnings = (model, t) => {
 export const buildSummaryText = (model, t) => {
   const requestRuleSuffix =
     model.billingMode === 'tiered_expr' && model.requestRuleExpr
-    ? `，${t('请求规则')}`
-    : '';
+      ? `，${t('请求规则')}`
+      : '';
   if (model.billingMode === 'tiered_expr') {
     const expr = model.billingExpr;
     if (!expr) return `${t('表达式计费')}${requestRuleSuffix}`;
@@ -303,8 +309,15 @@ export const buildSummaryText = (model, t) => {
     return `${t('阶梯计费')} (${tierCount} ${t('档')})${requestRuleSuffix}`;
   }
 
-  if (model.billingMode === 'per-request' && hasValue(model.fixedPrice)) {
-    return `${t('按次')} $${model.fixedPrice} / ${t('次')}${requestRuleSuffix}`;
+  if (
+    (model.billingMode === 'per-request' ||
+      model.billingMode === 'per-second') &&
+    hasValue(model.fixedPrice)
+  ) {
+    const billingLabel =
+      model.billingMode === 'per-second' ? t('按秒计费') : t('按次');
+    const unitLabel = model.billingMode === 'per-second' ? t('秒') : t('次');
+    return `${billingLabel} $${model.fixedPrice} / ${unitLabel}${requestRuleSuffix}`;
   }
 
   if (hasValue(model.inputPrice)) {
@@ -346,7 +359,10 @@ const serializeModel = (model, t) => {
     AudioCompletionRatio: null,
   };
 
-  if (model.billingMode === 'per-request') {
+  if (
+    model.billingMode === 'per-request' ||
+    model.billingMode === 'per-second'
+  ) {
     if (hasValue(model.fixedPrice)) {
       result.ModelPrice = toNormalizedNumber(model.fixedPrice);
     }
@@ -487,15 +503,23 @@ export const buildPreviewRows = (model, t) => {
     return rows;
   }
 
-  if (model.billingMode === 'per-request') {
-    const rows = [
+  if (
+    model.billingMode === 'per-request' ||
+    model.billingMode === 'per-second'
+  ) {
+    return [
       {
         key: 'ModelPrice',
         label: 'ModelPrice',
         value: hasValue(model.fixedPrice) ? model.fixedPrice : t('空'),
       },
+      {
+        key: 'ModelBillingMode',
+        label: 'ModelBillingMode',
+        value:
+          model.billingMode === 'per-second' ? 'per_second' : 'per_request',
+      },
     ];
-    return rows;
   }
 
   const inputPrice = toNumberOrNull(model.inputPrice);
@@ -646,8 +670,12 @@ export function useModelPricingEditorState({
       ImageRatio: parseOptionJSON(options.ImageRatio),
       AudioRatio: parseOptionJSON(options.AudioRatio),
       AudioCompletionRatio: parseOptionJSON(options.AudioCompletionRatio),
-      ModelBillingMode: parseOptionJSON(options['billing_setting.billing_mode']),
-      ModelBillingExpr: parseOptionJSON(options['billing_setting.billing_expr']),
+      ModelBillingMode: parseOptionJSON(
+        options['billing_setting.billing_mode'],
+      ),
+      ModelBillingExpr: parseOptionJSON(
+        options['billing_setting.billing_expr'],
+      ),
     };
 
     const names = new Set([
@@ -1034,7 +1062,7 @@ export function useModelPricingEditorState({
         AudioCompletionRatio: {},
       };
 
-      const tieredOutput = {
+      const billingOutput = {
         'billing_setting.billing_mode': {},
         'billing_setting.billing_expr': {},
       };
@@ -1046,9 +1074,17 @@ export function useModelPricingEditorState({
             model.requestRuleExpr,
           );
           if (finalBillingExpr) {
-            tieredOutput['billing_setting.billing_mode'][model.name] = 'tiered_expr';
-            tieredOutput['billing_setting.billing_expr'][model.name] = finalBillingExpr;
+            billingOutput['billing_setting.billing_mode'][model.name] =
+              'tiered_expr';
+            billingOutput['billing_setting.billing_expr'][model.name] =
+              finalBillingExpr;
           }
+        } else if (model.billingMode === 'per-second') {
+          billingOutput['billing_setting.billing_mode'][model.name] =
+            'per_second';
+        } else if (model.billingMode === 'per-request') {
+          billingOutput['billing_setting.billing_mode'][model.name] =
+            'per_request';
         }
 
         // Always serialize ratio/price values for all models (including
@@ -1076,7 +1112,7 @@ export function useModelPricingEditorState({
             value: JSON.stringify(value, null, 2),
           }),
         ),
-        ...Object.entries(tieredOutput).map(([key, value]) =>
+        ...Object.entries(billingOutput).map(([key, value]) =>
           API.put('/api/option/', {
             key,
             value: JSON.stringify(value, null, 2),

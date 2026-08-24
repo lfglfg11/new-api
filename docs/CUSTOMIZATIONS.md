@@ -367,11 +367,12 @@ git merge main
   - 非视频固定价模型默认按次。
 - 任务提交预扣和适配器 `AdjustBillingOnSubmit` 的倍率重算必须使用同一个计费单位解析规则，不能出现“界面显示按秒但实际按次”或相反的情况。
 - `/api/pricing` 对固定价模型发布 `task_billing_unit`（`request` / `second`），并在存在显式配置时发布 `billing_mode`（`per_request` / `per_second`）。
-- 模型广场必须同时支持：
+- default 与 Classic 两套模型广场都必须同时支持：
   - 固定价格单位 `/ request` 与 `/ second`（中文对应 `/ 次` 与 `/ 秒`）。
   - `Per Request` / `Per Second` Badge。
   - 按次与按秒独立筛选、独立数量统计。
-- 系统设置的模型定价可视化编辑器必须同时提供“按量计费、按次计费、按秒计费、表达式/阶梯计费”模式；保存固定价时把显式单位写入 `billing_setting.billing_mode`，重新打开时正确回显。
+- default 与 Classic 两套系统设置中的模型定价可视化编辑器，都必须提供“按量计费、按次计费、按秒计费、表达式/阶梯计费”四种模式；保存固定价时把显式单位写入 `billing_setting.billing_mode`，重新打开时正确回显。
+- 上游删除或重构 Classic 时，不能只保留新 UI 的按秒实现；Classic 的设置入口、价格单位、Badge、筛选和数量统计属于同一业务能力，必须一起恢复。
 - 上游价格同步 `/api/pricing` 必须能够导入 `per_request`、`per_second` 和有效的 `tiered_expr`，避免同步后丢失计费单位。
 
 #### 关键后端文件和符号
@@ -405,10 +406,23 @@ git merge main
 - `web/src/features/pricing/components/pricing-sidebar.tsx`
 - `web/src/features/system-settings/models/__tests__/model-pricing-billing-unit.test.ts`
 - `web/src/i18n/locales/*.json`
+- `web/classic/src/pages/Setting/Ratio/components/ModelPricingEditor.jsx`
+- `web/classic/src/pages/Setting/Ratio/hooks/useModelPricingEditorState.js`
+- `web/classic/src/helpers/utils.jsx`
+- `web/classic/src/components/table/model-pricing/`
+- `web/classic/src/hooks/model-pricing/`
+- `web/classic/src/i18n/locales/*.json`
+
+#### 验收要求
+
+- 分别打开 default 与 Classic 的“模型定价设置 → 可视化编辑”，确认同时存在按量、按次、按秒、表达式/阶梯四个选项。
+- 在 Classic 中把固定价模型设为按秒并保存，确认 `billing_setting.billing_mode` 写入 `per_second`，刷新后仍回显按秒；改为按次时对应写入并回显 `per_request`。
+- 使用包含 `task_billing_unit=second`、显式 `billing_mode=per_second`、显式 `billing_mode=per_request` 的 `/api/pricing` 数据验收两套模型广场，确认 Badge、`/秒` / `/次` 单位、筛选结果和数量统计一致。
+- Classic 前端执行 `bun run build`，并在生产镜像切换到 Classic theme 后做实际页面验收；不能只检查新 UI 构建产物。
 
 #### 同步风险
 
-上游可能继续直接用 `TASK_PRICE_PATCH` 判断是否跳过任务倍率，也可能重构模型广场或模型定价编辑器。同步时不能只保留环境变量兼容分支，必须保留“显式系统设置优先、环境变量仅作未配置时兜底”的业务优先级，并确认展示单位、保存值和实际预扣费使用同一解析结果。
+上游可能继续直接用 `TASK_PRICE_PATCH` 判断是否跳过任务倍率，也可能重构模型广场或模型定价编辑器。同步时不能只保留环境变量兼容分支，也不能只检查 default 新 UI；必须保留“显式系统设置优先、环境变量仅作未配置时兜底”的业务优先级，并逐项确认 default 与 Classic 的展示单位、Badge、筛选、保存值和实际预扣费使用同一解析结果。
 
 ### 4.11 Classic UI 必须适配 Dashboard 无状态认证协议
 
