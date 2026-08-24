@@ -167,7 +167,7 @@ const PricingCardView = ({
         <Tag
           key='billing'
           shape='circle'
-          color={perSecond ? 'cyan' : 'teal'}
+          color={perSecond ? 'orange' : 'teal'}
           size='small'
         >
           {perSecond ? t('按秒计费') : t('按次计费')}

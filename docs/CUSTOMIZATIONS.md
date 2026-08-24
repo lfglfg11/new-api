@@ -371,6 +371,7 @@ git merge main
   - 固定价格单位 `/ request` 与 `/ second`（中文对应 `/ 次` 与 `/ 秒`）。
   - `Per Request` / `Per Second` Badge。
   - 按次与按秒独立筛选、独立数量统计。
+  - 计费标签必须有清晰的视觉区分：Classic 中按次使用青绿色 `teal`，按秒使用醒目的亮橙色 `orange`；上游同步时不得恢复为视觉相近的 `teal` / `cyan`。
 - default 与 Classic 两套系统设置中的模型定价可视化编辑器，都必须提供“按量计费、按次计费、按秒计费、表达式/阶梯计费”四种模式；保存固定价时把显式单位写入 `billing_setting.billing_mode`，重新打开时正确回显。
 - 上游删除或重构 Classic 时，不能只保留新 UI 的按秒实现；Classic 的设置入口、价格单位、Badge、筛选和数量统计属于同一业务能力，必须一起恢复。
 - 上游价格同步 `/api/pricing` 必须能够导入 `per_request`、`per_second` 和有效的 `tiered_expr`，避免同步后丢失计费单位。
@@ -417,7 +418,7 @@ git merge main
 
 - 分别打开 default 与 Classic 的“模型定价设置 → 可视化编辑”，确认同时存在按量、按次、按秒、表达式/阶梯四个选项。
 - 在 Classic 中把固定价模型设为按秒并保存，确认 `billing_setting.billing_mode` 写入 `per_second`，刷新后仍回显按秒；改为按次时对应写入并回显 `per_request`。
-- 使用包含 `task_billing_unit=second`、显式 `billing_mode=per_second`、显式 `billing_mode=per_request` 的 `/api/pricing` 数据验收两套模型广场，确认 Badge、`/秒` / `/次` 单位、筛选结果和数量统计一致。
+- 使用包含 `task_billing_unit=second`、显式 `billing_mode=per_second`、显式 `billing_mode=per_request` 的 `/api/pricing` 数据验收两套模型广场，确认 Badge、`/秒` / `/次` 单位、筛选结果和数量统计一致，并确认 Classic 卡片、表格和详情中的按秒标签为亮橙色、按次标签为青绿色。
 - Classic 前端执行 `bun run build`，并在生产镜像切换到 Classic theme 后做实际页面验收；不能只检查新 UI 构建产物。
 
 #### 同步风险
@@ -673,7 +674,7 @@ bun run build
 - [ ] 显式 `per_request` 模型即使不在 `TASK_PRICE_PATCH` 中也按次计费。
 - [ ] 未显式设置的旧模型仍保持白名单内按次、白名单外按秒。
 - [ ] 系统设置保存并重新打开后，按次/按秒模式回显正确。
-- [ ] 模型广场的卡片、表格、Badge、筛选数量和价格单位均区分按次与按秒。
+- [ ] 模型广场的卡片、表格、Badge、筛选数量和价格单位均区分按次与按秒；Classic 按秒标签为亮橙色、按次标签为青绿色。
 - [ ] `/api/pricing` 返回的 `billing_mode` 与 `task_billing_unit` 和实际任务扣费一致。
 
 ### 日志、流式结算和渠道

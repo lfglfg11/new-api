@@ -122,7 +122,7 @@ const ModelPricingTable = ({
         let color = 'white';
         if (text === t('按量计费')) color = 'violet';
         else if (text === t('按次计费')) color = 'teal';
-        else if (text === t('按秒计费')) color = 'cyan';
+        else if (text === t('按秒计费')) color = 'orange';
         else if (text === t('动态计费')) color = 'amber';
         return (
           <Tag color={color} size='small' shape='circle'>

@@ -39,7 +39,7 @@ function renderQuotaType(type, record, t) {
     case 1: {
       const perSecond = isPerSecondBilling(record);
       return (
-        <Tag color={perSecond ? 'cyan' : 'teal'} shape='circle'>
+        <Tag color={perSecond ? 'orange' : 'teal'} shape='circle'>
           {perSecond ? t('按秒计费') : t('按次计费')}
         </Tag>
       );
