@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import * as z from 'zod'
 
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
+import type { TaskBillingUnit } from '@/features/pricing/types'
 
 import { formatPricingNumber } from './pricing-format'
 
@@ -39,7 +40,30 @@ export type ModelPricingFormValues = z.infer<
   ReturnType<typeof createModelPricingSchema>
 >
 
-export type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+export type PricingMode =
+  | 'per-token'
+  | 'per-request'
+  | 'per-second'
+  | 'tiered_expr'
+
+export type StoredBillingMode = 'per_request' | 'per_second' | 'tiered_expr'
+
+export function getStoredBillingMode(
+  mode: PricingMode
+): StoredBillingMode | null {
+  if (mode === 'per-request') return 'per_request'
+  if (mode === 'per-second') return 'per_second'
+  if (mode === 'tiered_expr') return 'tiered_expr'
+  return null
+}
+
+export function getTaskBillingUnitForPricingMode(
+  mode: PricingMode
+): TaskBillingUnit | undefined {
+  if (mode === 'per-request') return 'request'
+  if (mode === 'per-second') return 'second'
+  return undefined
+}
 
 export type LaneKey =
   | 'completion'
@@ -60,6 +84,7 @@ export type ModelRatioData = {
   audioRatio?: string
   audioCompletionRatio?: string
   billingMode?: PricingMode
+  taskBillingUnit?: TaskBillingUnit
   billingExpr?: string
   requestRuleExpr?: string
 }
@@ -230,7 +255,7 @@ export function buildPreviewRows(
     ]
   }
 
-  if (mode === 'per-request') {
+  if (mode === 'per-request' || mode === 'per-second') {
     return [
       {
         key: 'price',

@@ -350,6 +350,66 @@ git merge main
 - 后端构建时确认 `web/dist` 与 `web/classic/dist` 均存在并可被 embed。
 - 运行态分别选择 default/classic theme，确认页面资源、支付入口和渠道状态操作正常。
 
+### 4.10 `/v1/videos` 固定价模型按次/按秒计费
+
+#### 必须保留的行为
+
+- 系统设置 `billing_setting.billing_mode` 支持以下显式模式：
+  - `per_request`：固定价格按一次异步任务计费。
+  - `per_second`：固定价格乘以请求/适配器解析出的生成秒数等任务倍率。
+  - `tiered_expr`：继续使用现有表达式计费，不得被按次/按秒逻辑覆盖。
+- 显式系统设置的优先级高于环境变量 `TASK_PRICE_PATCH`：
+  - 模型显式设为 `per_second` 后，即使仍在 `TASK_PRICE_PATCH` 中也必须按秒计费，因此新增按秒模型不再需要修改环境变量白名单。
+  - 模型显式设为 `per_request` 后，即使不在白名单中也必须按次计费。
+- 未显式设置时必须保留旧部署兼容逻辑：
+  - `/v1/videos` 固定价模型位于 `TASK_PRICE_PATCH` 时按次。
+  - `/v1/videos` 固定价模型不在 `TASK_PRICE_PATCH` 时按秒，并应用 `seconds`、尺寸等 `OtherRatios`。
+  - 非视频固定价模型默认按次。
+- 任务提交预扣和适配器 `AdjustBillingOnSubmit` 的倍率重算必须使用同一个计费单位解析规则，不能出现“界面显示按秒但实际按次”或相反的情况。
+- `/api/pricing` 对固定价模型发布 `task_billing_unit`（`request` / `second`），并在存在显式配置时发布 `billing_mode`（`per_request` / `per_second`）。
+- 模型广场必须同时支持：
+  - 固定价格单位 `/ request` 与 `/ second`（中文对应 `/ 次` 与 `/ 秒`）。
+  - `Per Request` / `Per Second` Badge。
+  - 按次与按秒独立筛选、独立数量统计。
+- 系统设置的模型定价可视化编辑器必须同时提供“按量计费、按次计费、按秒计费、表达式/阶梯计费”模式；保存固定价时把显式单位写入 `billing_setting.billing_mode`，重新打开时正确回显。
+- 上游价格同步 `/api/pricing` 必须能够导入 `per_request`、`per_second` 和有效的 `tiered_expr`，避免同步后丢失计费单位。
+
+#### 关键后端文件和符号
+
+- `setting/billing_setting/tiered_billing.go`
+  - `GetExplicitBillingMode`
+  - `ResolveTaskBillingUnit`
+  - `ShouldApplyTaskBillingRatios`
+- `relay/relay_task.go`
+  - 任务 `EstimateBilling` 后的 `OtherRatios` 应用
+  - `AdjustBillingOnSubmit` 后的额度重算
+- `service/task_billing.go`
+- `model/pricing.go`
+- `controller/ratio_sync.go`
+- `setting/billing_setting/task_billing_test.go`
+- `model/pricing_task_billing_test.go`
+
+#### 关键前端文件
+
+- `web/src/features/system-settings/models/model-pricing-core.ts`
+- `web/src/features/system-settings/models/model-pricing-sheet.tsx`
+- `web/src/features/system-settings/models/model-pricing-snapshots.ts`
+- `web/src/features/system-settings/models/model-ratio-visual-editor.tsx`
+- `web/src/features/system-settings/models/model-ratio-table-columns.tsx`
+- `web/src/features/pricing/types.ts`
+- `web/src/features/pricing/lib/model-helpers.ts`
+- `web/src/features/pricing/lib/filters.ts`
+- `web/src/features/pricing/components/model-billing-mode-badge.tsx`
+- `web/src/features/pricing/components/model-card.tsx`
+- `web/src/features/pricing/components/pricing-columns.tsx`
+- `web/src/features/pricing/components/pricing-sidebar.tsx`
+- `web/src/features/system-settings/models/__tests__/model-pricing-billing-unit.test.ts`
+- `web/src/i18n/locales/*.json`
+
+#### 同步风险
+
+上游可能继续直接用 `TASK_PRICE_PATCH` 判断是否跳过任务倍率，也可能重构模型广场或模型定价编辑器。同步时不能只保留环境变量兼容分支，必须保留“显式系统设置优先、环境变量仅作未配置时兜底”的业务优先级，并确认展示单位、保存值和实际预扣费使用同一解析结果。
+
 ## 5. 条件性构建兼容项（按上游现状判断）
 
 以下内容来自历史合并或构建修复，但不是稳定的独立业务需求。未来同步时不能无脑保留旧实现；只有上游当前结构仍然需要时才继续保留：
@@ -505,6 +565,15 @@ bun run build
 - [ ] 没有 upstream ID 的任务会失败收敛。
 - [ ] 超时清理、CAS 更新和结算防重逻辑正常。
 - [ ] context 取消后轮询可以正常退出。
+
+### 异步视频计费
+
+- [ ] 显式 `per_second` 模型即使仍在 `TASK_PRICE_PATCH` 中也按秒应用任务倍率。
+- [ ] 显式 `per_request` 模型即使不在 `TASK_PRICE_PATCH` 中也按次计费。
+- [ ] 未显式设置的旧模型仍保持白名单内按次、白名单外按秒。
+- [ ] 系统设置保存并重新打开后，按次/按秒模式回显正确。
+- [ ] 模型广场的卡片、表格、Badge、筛选数量和价格单位均区分按次与按秒。
+- [ ] `/api/pricing` 返回的 `billing_mode` 与 `task_billing_unit` 和实际任务扣费一致。
 
 ### 日志、流式结算和渠道
 

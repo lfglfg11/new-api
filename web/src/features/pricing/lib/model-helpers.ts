@@ -107,3 +107,19 @@ export function replaceModelInPath(path: string, modelName: string): string {
 export function isTokenBasedModel(model: PricingModel): boolean {
   return model.quota_type === QUOTA_TYPE_VALUES.TOKEN
 }
+/**
+ * Check if a fixed-price async video model is billed per generated second.
+ */
+export function isPerSecondModel(model: PricingModel): boolean {
+  return (
+    model.quota_type === QUOTA_TYPE_VALUES.REQUEST &&
+    model.task_billing_unit === 'second'
+  )
+}
+
+/**
+ * Resolve the user-facing unit for fixed-price models.
+ */
+export function getFixedPriceUnit(model: PricingModel): 'request' | 'second' {
+  return isPerSecondModel(model) ? 'second' : 'request'
+}

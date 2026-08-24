@@ -17,8 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { splitBillingExprAndRequestRules } from '@/features/pricing/lib/billing-expr'
+import type { TaskBillingUnit } from '@/features/pricing/types'
 
 import { safeJsonParse } from '../utils/json-parser'
+import type { PricingMode } from './model-pricing-core'
 import { formatPricingNumber } from './pricing-format'
 
 export type ModelPricingSnapshotInput = {
@@ -44,7 +46,8 @@ export type ModelPricingSnapshot = {
   imageRatio?: string
   audioRatio?: string
   audioCompletionRatio?: string
-  billingMode?: string
+  billingMode?: PricingMode
+  taskBillingUnit?: TaskBillingUnit
   billingExpr?: string
   requestRuleExpr?: string
   hasConflict: boolean
@@ -80,17 +83,45 @@ const ratioToPrice = (ratio?: string, denominator?: string) => {
   return formatPricingNumber(ratioNumber * denominatorNumber)
 }
 
-export const getModeLabel = (mode?: string) => {
-  if (mode === 'per-request') return 'Per-request'
-  if (mode === 'tiered_expr') return 'Expression'
+export type DisplayPricingMode =
+  | 'per-token'
+  | 'per-request'
+  | 'per-second'
+  | 'tiered_expr'
+
+export const getDisplayPricingMode = (
+  row: Pick<ModelPricingSnapshot, 'billingMode' | 'taskBillingUnit'>
+): DisplayPricingMode => {
+  if (row.billingMode === 'tiered_expr') return 'tiered_expr'
+  if (row.billingMode === 'per-second') return 'per-second'
+  if (row.billingMode !== 'per-request') return 'per-token'
+  return row.taskBillingUnit === 'second' ? 'per-second' : 'per-request'
+}
+
+export const getModeLabel = (
+  mode?: PricingMode,
+  taskBillingUnit?: TaskBillingUnit
+) => {
+  const displayMode = getDisplayPricingMode({
+    billingMode: mode,
+    taskBillingUnit,
+  })
+  if (displayMode === 'per-second') return 'Per-second'
+  if (displayMode === 'per-request') return 'Per-request'
+  if (displayMode === 'tiered_expr') return 'Expression'
   return 'Per-token'
 }
 
 export const getModeVariant = (
-  mode?: string
+  mode?: PricingMode,
+  taskBillingUnit?: TaskBillingUnit
 ): 'warning' | 'info' | 'success' => {
-  if (mode === 'per-request') return 'warning'
-  if (mode === 'tiered_expr') return 'info'
+  const displayMode = getDisplayPricingMode({
+    billingMode: mode,
+    taskBillingUnit,
+  })
+  if (displayMode === 'per-request') return 'warning'
+  if (displayMode === 'tiered_expr') return 'info'
   return 'success'
 }
 
@@ -112,8 +143,10 @@ export const getPriceSummary = (
   if (row.billingMode === 'tiered_expr') {
     return getExpressionSummary(row, t)
   }
-  if (row.billingMode === 'per-request') {
-    return row.price ? `$${row.price} / ${t('request')}` : t('Unset price')
+  const displayMode = getDisplayPricingMode(row)
+  if (displayMode === 'per-request' || displayMode === 'per-second') {
+    const unit = displayMode === 'per-second' ? 'second' : 'request'
+    return row.price ? `$${row.price} / ${t(unit)}` : t('Unset price')
   }
 
   const inputPrice = ratioToPrice(row.ratio)
@@ -142,7 +175,11 @@ export const getPriceDetail = (
       ? t('Includes request rules')
       : t('Expression based')
   }
-  if (row.billingMode === 'per-request') {
+  const displayMode = getDisplayPricingMode(row)
+  if (displayMode === 'per-second') {
+    return t('Fixed price per generated second')
+  }
+  if (displayMode === 'per-request') {
     return t('Fixed request price')
   }
 
@@ -229,7 +266,7 @@ export const buildModelSnapshots = ({
     ...Object.keys(billingExprMap),
   ])
 
-  return Array.from(modelNames).map((name) => {
+  return [...modelNames].map((name) => {
     const price = priceMap[name]?.toString() || ''
     const ratio = ratioMap[name]?.toString() || ''
     const cache = cacheMap[name]?.toString() || ''
@@ -258,6 +295,32 @@ export const buildModelSnapshots = ({
         audioRatio: audio,
         audioCompletionRatio: audioCompletion,
         hasConflict: false,
+      }
+    }
+
+    if (modeForModel === 'per_second' || modeForModel === 'per_request') {
+      return {
+        name,
+        price,
+        ratio,
+        cacheRatio: cache,
+        createCacheRatio: createCache,
+        completionRatio: completion,
+        imageRatio: image,
+        audioRatio: audio,
+        audioCompletionRatio: audioCompletion,
+        billingMode:
+          modeForModel === 'per_second' ? 'per-second' : 'per-request',
+        taskBillingUnit: modeForModel === 'per_second' ? 'second' : 'request',
+        hasConflict:
+          price !== '' &&
+          (ratio !== '' ||
+            completion !== '' ||
+            cache !== '' ||
+            createCache !== '' ||
+            image !== '' ||
+            audio !== '' ||
+            audioCompletion !== ''),
       }
     }
 
@@ -297,6 +360,7 @@ export const getSnapshotSignature = (snapshot?: ModelPricingSnapshot) => {
     audioRatio: snapshot.audioRatio || '',
     audioCompletionRatio: snapshot.audioCompletionRatio || '',
     billingMode: snapshot.billingMode || 'per-token',
+    taskBillingUnit: snapshot.taskBillingUnit || '',
     billingExpr: snapshot.billingExpr || '',
     requestRuleExpr: snapshot.requestRuleExpr || '',
   })

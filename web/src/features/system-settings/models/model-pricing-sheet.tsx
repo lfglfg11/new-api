@@ -69,6 +69,7 @@ import {
   buildPreviewRows,
   createInitialLaneState,
   createModelPricingSchema,
+  getTaskBillingUnitForPricingMode,
   hasValue,
   laneConfigs,
   numericDraftRegex,
@@ -188,13 +189,17 @@ export const ModelPricingEditorPanel = forwardRef<
         audioRatio: editData.audioRatio || '',
         audioCompletionRatio: editData.audioCompletionRatio || '',
       })
-      setPricingMode(
-        editData.billingMode === 'tiered_expr'
-          ? 'tiered_expr'
-          : editData.price
-            ? 'per-request'
-            : 'per-token'
-      )
+      let nextPricingMode = editData.billingMode
+      if (!nextPricingMode) {
+        nextPricingMode = editData.price ? 'per-request' : 'per-token'
+      }
+      if (
+        nextPricingMode === 'per-request' &&
+        editData.taskBillingUnit === 'second'
+      ) {
+        nextPricingMode = 'per-second'
+      }
+      setPricingMode(nextPricingMode)
       setBillingExpr(editData.billingExpr || '')
       setRequestRuleExpr(editData.requestRuleExpr || '')
     } else {
@@ -443,6 +448,7 @@ export const ModelPricingEditorPanel = forwardRef<
       const data: ModelRatioData = {
         name: values.name.trim(),
         billingMode: pricingMode,
+        taskBillingUnit: getTaskBillingUnitForPricingMode(pricingMode),
         price: values.price || '',
         ratio: values.ratio || '',
         cacheRatio: values.cacheRatio || '',
@@ -544,12 +550,15 @@ export const ModelPricingEditorPanel = forwardRef<
                   onValueChange={handleModeChange}
                   className='gap-4'
                 >
-                  <TabsList className='grid w-full grid-cols-3'>
+                  <TabsList className='grid w-full grid-cols-2 sm:grid-cols-4'>
                     <TabsTrigger value='per-token'>
                       {t('Per-token')}
                     </TabsTrigger>
                     <TabsTrigger value='per-request'>
                       {t('Per-request')}
+                    </TabsTrigger>
+                    <TabsTrigger value='per-second'>
+                      {t('Per-second')}
                     </TabsTrigger>
                     <TabsTrigger value='tiered_expr'>
                       {t('Expression')}
@@ -598,46 +607,65 @@ export const ModelPricingEditorPanel = forwardRef<
                     </FieldGroup>
                   </TabsContent>
 
-                  <TabsContent value='per-request' className='pt-0'>
-                    <FieldGroup className='gap-5'>
-                      <FormField
-                        control={form.control}
-                        name='price'
-                        render={({ field }) => (
-                          <FormItem className='contents'>
-                            <Field>
-                              <FieldLabel>{t('Fixed price')}</FieldLabel>
-                              <FormControl>
-                                <InputGroup>
-                                  <InputGroupAddon>$</InputGroupAddon>
-                                  <InputGroupInput
-                                    inputMode='decimal'
-                                    placeholder='0.01'
-                                    {...field}
-                                    onChange={(event) => {
-                                      const value = event.target.value
-                                      if (numericDraftRegex.test(value)) {
-                                        field.onChange(value)
-                                      }
-                                    }}
-                                  />
-                                  <InputGroupAddon align='inline-end'>
-                                    {t('per request')}
-                                  </InputGroupAddon>
-                                </InputGroup>
-                              </FormControl>
-                              <FieldDescription>
-                                {t(
-                                  'Cost in USD per request, regardless of tokens used.'
-                                )}
-                              </FieldDescription>
-                              <FormMessage />
-                            </Field>
-                          </FormItem>
-                        )}
-                      />
-                    </FieldGroup>
-                  </TabsContent>
+                  {(
+                    [
+                      {
+                        mode: 'per-request',
+                        unit: 'per request',
+                        description:
+                          'Cost in USD per request, regardless of tokens used.',
+                      },
+                      {
+                        mode: 'per-second',
+                        unit: 'per second',
+                        description:
+                          'Cost in USD per generated second for /v1/videos async tasks.',
+                      },
+                    ] as const
+                  ).map((fixedPriceMode) => (
+                    <TabsContent
+                      key={fixedPriceMode.mode}
+                      value={fixedPriceMode.mode}
+                      className='pt-0'
+                    >
+                      <FieldGroup className='gap-5'>
+                        <FormField
+                          control={form.control}
+                          name='price'
+                          render={({ field }) => (
+                            <FormItem className='contents'>
+                              <Field>
+                                <FieldLabel>{t('Fixed price')}</FieldLabel>
+                                <FormControl>
+                                  <InputGroup>
+                                    <InputGroupAddon>$</InputGroupAddon>
+                                    <InputGroupInput
+                                      inputMode='decimal'
+                                      placeholder='0.01'
+                                      {...field}
+                                      onChange={(event) => {
+                                        const value = event.target.value
+                                        if (numericDraftRegex.test(value)) {
+                                          field.onChange(value)
+                                        }
+                                      }}
+                                    />
+                                    <InputGroupAddon align='inline-end'>
+                                      {t(fixedPriceMode.unit)}
+                                    </InputGroupAddon>
+                                  </InputGroup>
+                                </FormControl>
+                                <FieldDescription>
+                                  {t(fixedPriceMode.description)}
+                                </FieldDescription>
+                                <FormMessage />
+                              </Field>
+                            </FormItem>
+                          )}
+                        />
+                      </FieldGroup>
+                    </TabsContent>
+                  ))}
 
                   <TabsContent value='tiered_expr' className='pt-0'>
                     <FieldGroup className='gap-5'>

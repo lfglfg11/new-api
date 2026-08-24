@@ -45,3 +45,9 @@
 - **Classic 契约测试对齐**：将上游“Classic 已移除”的断言改为二开真实契约，验证 `theme.frontend=classic` 可保存，且 `/api/status` 会发布选中的 Classic theme。相关路径：`controller/theme_compat_test.go`。
 - **二开文档强制规则**：新增 `docs/CUSTOMIZATIONS.md`，并在根目录 `AGENTS.md` 规定：今后 `hub`、`hub0`、`hub-merge-upstream` 的任何二开代码、配置、前端、工作流、兼容或冲突决策，都必须在同一批变更中同步更新 `log.md` 与 `docs/CUSTOMIZATIONS.md`；纯上游 `main` 不写二开记录。
 - **验证结果**：`go test ./model ./router ./service ./relay/channel/openai`、`go test ./controller -count=1`、`go build ./...`、`cd relaykit; GOWORK=off go build ./...` 均通过；OpenAI SSE、任务并行定向回归测试通过；新 UI `bun run build` 与 Classic UI `bun run build` 均通过。完整 `go test ./...` 最终通过。
+
+- **`/v1/videos` 按秒/按次计费配置**：固定价异步视频模型新增显式 `per_second` 与 `per_request` 模式；系统设置中的显式选择优先于 `TASK_PRICE_PATCH`，按秒模型不再需要加入环境变量白名单，显式按次模型也不会误乘视频秒数。
+- **`TASK_PRICE_PATCH` 向后兼容**：未显式配置计费单位时继续沿用旧逻辑——白名单内视频模型按次，白名单外视频模型按请求中的生成秒数应用 `OtherRatios`；非视频固定价模型默认按次，兼容上游和既有部署。
+- **计费链路统一**：任务提交预扣、适配器提交后倍率调整、任务消费日志统一使用 `billing_setting.ShouldApplyTaskBillingRatios` 判定，避免系统设置、环境变量和实际扣费口径不一致。
+- **模型广场与系统设置展示**：`/api/pricing` 新增 `task_billing_unit`，模型卡片、表格、Badge、筛选器分别显示 `/次`、`/秒` 和“按次/按秒”；模型定价可视化编辑器新增“按秒计费”标签页并持久化到 `billing_setting.billing_mode`，上游价格同步也可导入 `per_request` / `per_second`。
+- **按秒计费验证**：`go test ./setting/billing_setting ./model -count=1`、`go test ./controller ./relay -count=1`、service 任务计费定向测试、相关前端 Vitest、定向 Oxlint、`bun run i18n:sync`、新 UI `bun run build`、`go build ./...` 均通过；完整 `go test ./service -count=1` 仍会触发与本次无关的既有缓存测试 `TestObserveChannelAffinityUsageCacheByRelayFormat_UnsupportedModeKeepsEmpty`（整包运行期望 1、实际 3），该测试单独运行通过。

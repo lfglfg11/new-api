@@ -33,6 +33,7 @@ type Pricing struct {
 	AudioCompletionRatio   *float64                `json:"audio_completion_ratio,omitempty"`
 	EnableGroup            []string                `json:"enable_groups"`
 	SupportedEndpointTypes []constant.EndpointType `json:"supported_endpoint_types"`
+	TaskBillingUnit        string                  `json:"task_billing_unit,omitempty"`
 	BillingMode            string                  `json:"billing_mode,omitempty"`
 	BillingExpr            string                  `json:"billing_expr,omitempty"`
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
@@ -115,6 +116,21 @@ func getPricingEndpointTypesForAbility(ability AbilityWithChannel, advancedCusto
 		return config.SupportedEndpointTypesForModel(ability.Model)
 	}
 	return common.GetEndpointTypesByChannelType(ability.ChannelType, ability.Model)
+}
+
+func resolveTaskBillingUnit(modelName string, quotaType int, endpointTypes []constant.EndpointType) string {
+	if quotaType != 1 {
+		return ""
+	}
+
+	isVideoModel := false
+	for _, endpointType := range endpointTypes {
+		if endpointType == constant.EndpointTypeOpenAIVideo {
+			isVideoModel = true
+			break
+		}
+	}
+	return billing_setting.ResolveTaskBillingUnit(modelName, isVideoModel)
 }
 
 // loadPricingAdvancedCustomConfigs runs inside updatePricing while
@@ -400,12 +416,22 @@ func updatePricing() {
 			audioCompletionRatio := ratio_setting.GetAudioCompletionRatio(model)
 			pricing.AudioCompletionRatio = &audioCompletionRatio
 		}
-		if billingMode := billing_setting.GetBillingMode(model); billingMode == "tiered_expr" {
-			if expr, ok := billing_setting.GetBillingExpr(model); ok && strings.TrimSpace(expr) != "" {
+		if billingMode, ok := billing_setting.GetExplicitBillingMode(model); ok {
+			switch billingMode {
+			case billing_setting.BillingModePerRequest, billing_setting.BillingModePerSecond:
 				pricing.BillingMode = billingMode
-				pricing.BillingExpr = expr
+			case billing_setting.BillingModeTieredExpr:
+				if expr, exprOk := billing_setting.GetBillingExpr(model); exprOk && strings.TrimSpace(expr) != "" {
+					pricing.BillingMode = billingMode
+					pricing.BillingExpr = expr
+				}
 			}
 		}
+		pricing.TaskBillingUnit = resolveTaskBillingUnit(
+			model,
+			pricing.QuotaType,
+			pricing.SupportedEndpointTypes,
+		)
 		pricingMap = append(pricingMap, pricing)
 	}
 

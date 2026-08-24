@@ -47,11 +47,12 @@ import {
   useDataTable,
 } from '@/components/data-table'
 import { Button } from '@/components/ui/button'
+import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
 import { useMediaQuery } from '@/hooks'
 
 import { safeJsonParse } from '../utils/json-parser'
-import type { PricingMode } from './model-pricing-core'
+import { getStoredBillingMode, type PricingMode } from './model-pricing-core'
 import {
   ModelPricingEditorPanel,
   type ModelPricingEditorPanelHandle,
@@ -60,6 +61,7 @@ import {
 } from './model-pricing-sheet'
 import {
   buildModelSnapshots,
+  getDisplayPricingMode,
   getSnapshotSignature,
   isBasePricingUnset,
   type ModelRow,
@@ -136,6 +138,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
   ref
 ) {
   const { t } = useTranslation()
+  const { models: pricingModels } = usePricingData()
   const isMobile = useMediaQuery('(max-width: 767px)')
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
@@ -188,6 +191,17 @@ const ModelRatioVisualEditorComponent = forwardRef<
     localStorage.setItem(STORAGE_KEY, JSON.stringify(columnVisibility))
   }, [columnVisibility])
 
+  const taskBillingUnitByModel = useMemo(
+    () =>
+      new Map(
+        pricingModels.map((model) => [
+          model.model_name,
+          model.task_billing_unit,
+        ])
+      ),
+    [pricingModels]
+  )
+
   const models = useMemo(() => {
     const savedRows = buildModelSnapshots({
       modelPrice: savedModelPrice,
@@ -232,6 +246,8 @@ const ModelRatioVisualEditorComponent = forwardRef<
 
         return {
           ...displayed,
+          taskBillingUnit:
+            displayed.taskBillingUnit ?? taskBillingUnitByModel.get(name),
           saved,
           draft,
           isDraftChanged: savedSignature !== draftSignature,
@@ -265,25 +281,26 @@ const ModelRatioVisualEditorComponent = forwardRef<
     audioCompletionRatio,
     billingMode,
     billingExpr,
+    taskBillingUnitByModel,
   ])
 
   const modeCounts = useMemo(
     () =>
       models.reduce(
         (acc, model) => {
-          const mode =
-            model.billingMode === 'per-request' ||
-            model.billingMode === 'tiered_expr'
-              ? model.billingMode
-              : 'per-token'
+          const mode = getDisplayPricingMode(model)
           acc[mode] += 1
           return acc
         },
         {
           'per-token': 0,
           'per-request': 0,
+          'per-second': 0,
           tiered_expr: 0,
-        } as Record<'per-token' | 'per-request' | 'tiered_expr', number>
+        } as Record<
+          'per-token' | 'per-request' | 'per-second' | 'tiered_expr',
+          number
+        >
       ),
     [models]
   )
@@ -291,12 +308,10 @@ const ModelRatioVisualEditorComponent = forwardRef<
   const handleEdit = useCallback(
     (model: ModelRow) => {
       const editableModel = model.draft ?? model.saved ?? model
-      let editBillingMode: PricingMode = 'per-token'
-      if (editableModel.billingMode === 'tiered_expr') {
-        editBillingMode = 'tiered_expr'
-      } else if (editableModel.price && editableModel.price !== '') {
-        editBillingMode = 'per-request'
-      }
+      const editBillingMode: PricingMode = getDisplayPricingMode({
+        billingMode: editableModel.billingMode,
+        taskBillingUnit: editableModel.taskBillingUnit ?? model.taskBillingUnit,
+      })
       setEditData({
         name: editableModel.name,
         price: editableModel.price,
@@ -308,6 +323,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
         audioRatio: editableModel.audioRatio,
         audioCompletionRatio: editableModel.audioCompletionRatio,
         billingMode: editBillingMode,
+        taskBillingUnit: editableModel.taskBillingUnit ?? model.taskBillingUnit,
         billingExpr: editableModel.billingExpr,
         requestRuleExpr: editableModel.requestRuleExpr,
       })
@@ -527,7 +543,7 @@ const ModelRatioVisualEditorComponent = forwardRef<
         value: string | undefined
       ) => {
         if (!value || value === '') return
-        const parsed = parseFloat(value)
+        const parsed = Number.parseFloat(value)
         if (Number.isFinite(parsed)) target[name] = parsed
       }
 
@@ -565,6 +581,15 @@ const ModelRatioVisualEditorComponent = forwardRef<
           setIfPresent(audioMap, name, data.audioRatio)
           setIfPresent(audioCompletionMap, name, data.audioCompletionRatio)
         } else if (data.price && data.price !== '') {
+          const storedBillingMode = getStoredBillingMode(
+            data.billingMode || 'per-request'
+          )
+          if (
+            storedBillingMode === 'per_request' ||
+            storedBillingMode === 'per_second'
+          ) {
+            billingModeMap[name] = storedBillingMode
+          }
           setIfPresent(priceMap, name, data.price)
         } else {
           setIfPresent(ratioMap, name, data.ratio)
@@ -689,17 +714,22 @@ const ModelRatioVisualEditorComponent = forwardRef<
                 title: t('Mode'),
                 options: [
                   {
-                    label: 'Per-token',
+                    label: t('Per-token'),
                     value: 'per-token',
                     count: modeCounts['per-token'],
                   },
                   {
-                    label: 'Per-request',
+                    label: t('Per-request'),
                     value: 'per-request',
                     count: modeCounts['per-request'],
                   },
                   {
-                    label: 'Expression',
+                    label: t('Per-second'),
+                    value: 'per-second',
+                    count: modeCounts['per-second'],
+                  },
+                  {
+                    label: t('Expression'),
                     value: 'tiered_expr',
                     count: modeCounts.tiered_expr,
                   },

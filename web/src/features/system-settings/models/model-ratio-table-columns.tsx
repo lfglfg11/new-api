@@ -24,6 +24,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { Checkbox } from '@/components/ui/checkbox'
 
 import {
+  getDisplayPricingMode,
   getModeLabel,
   getModeVariant,
   getPriceDetail,
@@ -105,14 +106,20 @@ export function buildModelRatioColumns({
       enableHiding: false,
     },
     {
-      accessorKey: 'billingMode',
+      id: 'billingMode',
+      accessorFn: (row) => getDisplayPricingMode(row),
       header: ({ column }) => (
         <DataTableColumnHeader column={column} title={t('Mode')} />
       ),
       cell: ({ row }) => (
         <StatusBadge
-          label={t(getModeLabel(row.original.billingMode))}
-          variant={getModeVariant(row.original.billingMode)}
+          label={t(
+            getModeLabel(row.original.billingMode, row.original.taskBillingUnit)
+          )}
+          variant={getModeVariant(
+            row.original.billingMode,
+            row.original.taskBillingUnit
+          )}
           copyable={false}
           showDot={false}
           className='-ml-1.5 px-0'

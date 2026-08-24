@@ -3,6 +3,7 @@ package billing_setting
 import (
 	"fmt"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	"github.com/QuantumNous/new-api/setting/config"
 	"github.com/samber/lo"
@@ -10,9 +11,14 @@ import (
 
 const (
 	BillingModeRatio      = "ratio"
+	BillingModePerRequest = "per_request"
+	BillingModePerSecond  = "per_second"
 	BillingModeTieredExpr = "tiered_expr"
 	BillingModeField      = "billing_mode"
 	BillingExprField      = "billing_expr"
+
+	TaskBillingUnitRequest = "request"
+	TaskBillingUnitSecond  = "second"
 )
 
 // BillingSetting is managed by config.GlobalConfig.Register.
@@ -40,6 +46,47 @@ func GetBillingMode(model string) string {
 		return mode
 	}
 	return BillingModeRatio
+}
+
+// GetExplicitBillingMode returns only modes explicitly configured in
+// billing_setting.billing_mode. Callers that need legacy fallback behavior
+// must not use GetBillingMode because its default value is BillingModeRatio.
+func GetExplicitBillingMode(model string) (string, bool) {
+	mode, ok := billingSetting.BillingMode[model]
+	return mode, ok
+}
+
+// ResolveTaskBillingUnit resolves the display and billing unit for a
+// fixed-price task model. Explicit system settings take priority. When no
+// explicit task mode exists, video models keep the legacy TASK_PRICE_PATCH
+// behavior so existing deployments remain compatible.
+func ResolveTaskBillingUnit(model string, isVideoModel bool) string {
+	if mode, ok := GetExplicitBillingMode(model); ok {
+		switch mode {
+		case BillingModePerSecond:
+			return TaskBillingUnitSecond
+		case BillingModePerRequest:
+			return TaskBillingUnitRequest
+		}
+	}
+
+	if !isVideoModel {
+		return TaskBillingUnitRequest
+	}
+	for _, patchedModel := range constant.TaskPricePatches {
+		if patchedModel == model {
+			return TaskBillingUnitRequest
+		}
+	}
+	return TaskBillingUnitSecond
+}
+
+// ShouldApplyTaskBillingRatios controls whether task-specific multipliers such
+// as generated seconds are applied. Explicit per-second/per-request settings
+// override TASK_PRICE_PATCH; without an explicit setting the legacy whitelist
+// remains authoritative.
+func ShouldApplyTaskBillingRatios(model string) bool {
+	return ResolveTaskBillingUnit(model, true) == TaskBillingUnitSecond
 }
 
 func GetBillingExpr(model string) (string, bool) {

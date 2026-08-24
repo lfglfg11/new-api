@@ -20,6 +20,8 @@ For commercial licensing, please contact support@quantumnous.com
 // Pricing Types
 // ----------------------------------------------------------------------------
 
+export type TaskBillingUnit = 'request' | 'second'
+
 export type PricingVendor = {
   id: number
   name: string
@@ -48,6 +50,7 @@ export type PricingModel = {
   enable_groups: string[]
   tags?: string
   supported_endpoint_types?: string[]
+  task_billing_unit?: TaskBillingUnit
   key?: string
   group_ratio?: Record<string, number>
   /** Billing mode (e.g. "tiered_expr") used to flag dynamic pricing */
