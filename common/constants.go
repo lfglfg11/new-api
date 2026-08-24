@@ -1,9 +1,9 @@
 package common
 
 import (
+	"crypto/tls"
 	"strings"
 	"sync/atomic"
-	"crypto/tls"
 	//"os"
 	//"strconv"
 	"sync"
@@ -11,7 +11,6 @@ import (
 
 	"github.com/google/uuid"
 )
-
 
 var themeValue atomic.Value // stores string; safe for concurrent read/write
 
@@ -248,6 +247,9 @@ var (
 	CriticalRateLimitEnable   bool
 	CriticalRateLimitNum            = 20
 	CriticalRateLimitDuration int64 = 20 * 60
+
+	AuthRefreshRateLimitNum            = 120
+	AuthRefreshRateLimitDuration int64 = 20 * 60
 
 	UploadRateLimitNum            = 10
 	UploadRateLimitDuration int64 = 60

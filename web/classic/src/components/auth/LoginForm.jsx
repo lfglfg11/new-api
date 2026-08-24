@@ -37,6 +37,7 @@ import {
   prepareCredentialRequestOptions,
   buildAssertionResult,
   applyAuthBundle,
+  getAuthErrorMessage,
   isPasskeySupported,
 } from '../../helpers';
 import Turnstile from 'react-turnstile';
@@ -191,7 +192,7 @@ const LoginForm = () => {
     try {
       const res = await API.get(
         `/api/oauth/wechat?code=${inputs.wechat_verification_code}`,
-        { skipAuthRefresh: true },
+        { skipAuthRefresh: true, skipErrorHandler: true },
       );
       const { success, message, data } = res.data;
       if (success) {
@@ -203,7 +204,7 @@ const LoginForm = () => {
         showError(message);
       }
     } catch (error) {
-      showError('登录失败，请重试');
+      showError(getAuthErrorMessage(error, t));
     } finally {
       setWechatCodeSubmitLoading(false);
     }
@@ -232,7 +233,7 @@ const LoginForm = () => {
             username,
             password,
           },
-          { skipAuthRefresh: true },
+          { skipAuthRefresh: true, skipErrorHandler: true },
         );
         const { success, message, data } = res.data;
         if (success) {
@@ -265,7 +266,7 @@ const LoginForm = () => {
         showError('请输入用户名和密码！');
       }
     } catch (error) {
-      showError('登录失败，请重试');
+      showError(getAuthErrorMessage(error, t));
     } finally {
       setLoginLoading(false);
     }
@@ -297,6 +298,7 @@ const LoginForm = () => {
       const res = await API.get(`/api/oauth/telegram/login`, {
         params,
         skipAuthRefresh: true,
+        skipErrorHandler: true,
       });
       const { success, message, data } = res.data;
       if (success) {
@@ -307,7 +309,7 @@ const LoginForm = () => {
         showError(message);
       }
     } catch (error) {
-      showError('登录失败，请重试');
+      showError(getAuthErrorMessage(error, t));
     }
   };
 
@@ -432,7 +434,7 @@ const LoginForm = () => {
       const beginRes = await API.post(
         '/api/user/passkey/login/begin',
         undefined,
-        { skipAuthRefresh: true },
+        { skipAuthRefresh: true, skipErrorHandler: true },
       );
       const { success, message, data } = beginRes.data;
       if (!success) {
@@ -464,7 +466,7 @@ const LoginForm = () => {
           flow_token: flowToken,
           credential: payload,
         },
-        { skipAuthRefresh: true },
+        { skipAuthRefresh: true, skipErrorHandler: true },
       );
       const finish = finishRes.data;
       if (finish.success) {
@@ -478,7 +480,7 @@ const LoginForm = () => {
       if (error?.name === 'AbortError') {
         showInfo('已取消 Passkey 登录');
       } else {
-        showError('Passkey 登录失败，请重试');
+        showError(getAuthErrorMessage(error, t));
       }
     } finally {
       setPasskeyLoading(false);

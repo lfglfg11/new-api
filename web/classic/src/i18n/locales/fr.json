@@ -3689,7 +3689,12 @@
     "按秒计费": "Facturation à la seconde",
     "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "Saisissez directement le prix pour une facturation au volume, par requête ou à la seconde. Utilisez la facturation par expression/paliers si le prix dépend des paramètres ou en-têtes de la requête.",
     "输入每秒价格": "Saisir le prix par seconde",
-    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Convient aux modèles asynchrones tels que /v1/videos facturés selon les secondes générées."
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Convient aux modèles asynchrones tels que /v1/videos facturés selon les secondes générées.",
+    "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.": "Le nombre maximal de sessions de connexion actives est atteint. Sur un appareil déjà connecté, ouvrez « Sessions de connexion » et utilisez « Déconnecter les autres sessions » pour les révoquer. Si vous n’avez accès à aucun appareil connecté, réinitialisez votre mot de passe pour fermer toutes les sessions.",
+    "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.": "Trop de sessions de connexion ont été créées récemment. Attendez la fin de la fenêtre glissante, puis réessayez.",
+    "Too many login attempts. Please wait {{seconds}} seconds and try again.": "Trop de tentatives de connexion. Veuillez patienter {{seconds}} secondes puis réessayer.",
+    "Too many login attempts. Please try again later.": "Trop de tentatives de connexion. Veuillez réessayer plus tard.",
+    "Login failed. Please try again.": "Échec de la connexion. Veuillez réessayer."
   },
   "Epay / Alipay / WeChat": "Epay / Alipay / WeChat",
   "易支付/支付宝/微信": "Epay / Alipay / WeChat",

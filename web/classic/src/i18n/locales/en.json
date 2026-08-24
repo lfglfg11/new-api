@@ -3835,7 +3835,12 @@
     "按秒计费": "Per-second billing",
     "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "Enter prices directly for per-token, per-request, or per-second billing. Use expression/tiered billing when pricing depends on request parameters or headers.",
     "输入每秒价格": "Enter price per second",
-    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Suitable for asynchronous models such as /v1/videos that charge by generated seconds."
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Suitable for asynchronous models such as /v1/videos that charge by generated seconds.",
+    "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.": "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.",
+    "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.": "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.",
+    "Too many login attempts. Please wait {{seconds}} seconds and try again.": "Too many login attempts. Please wait {{seconds}} seconds and try again.",
+    "Too many login attempts. Please try again later.": "Too many login attempts. Please try again later.",
+    "Login failed. Please try again.": "Login failed. Please try again."
   },
   "Epay / Alipay / WeChat": "Epay / Alipay / WeChat",
   "易支付/支付宝/微信": "Epay / Alipay / WeChat",

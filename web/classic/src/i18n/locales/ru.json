@@ -3709,7 +3709,12 @@
     "按秒计费": "Посекундная оплата",
     "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "Для оплаты по объёму, за запрос или за секунду укажите цену напрямую. Если цена зависит от параметров или заголовков запроса, используйте выражение или ступенчатую тарификацию.",
     "输入每秒价格": "Введите цену за секунду",
-    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Подходит для асинхронных моделей, таких как /v1/videos, с оплатой за секунды генерации."
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Подходит для асинхронных моделей, таких как /v1/videos, с оплатой за секунды генерации.",
+    "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.": "Достигнут лимит активных сеансов входа. На устройстве, где вы уже вошли, откройте «Сеансы входа» и выберите «Завершить другие сеансы», чтобы отозвать их. Если доступа к такому устройству нет, сбросьте пароль, чтобы завершить все сеансы.",
+    "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.": "За последнее время создано слишком много сеансов входа. Дождитесь окончания скользящего окна и повторите попытку.",
+    "Too many login attempts. Please wait {{seconds}} seconds and try again.": "Слишком много попыток входа. Подождите {{seconds}} секунд и повторите попытку.",
+    "Too many login attempts. Please try again later.": "Слишком много попыток входа. Повторите попытку позже.",
+    "Login failed. Please try again.": "Не удалось войти. Повторите попытку."
   },
   "Epay / Alipay / WeChat": "Epay / Alipay / WeChat",
   "易支付/支付宝/微信": "Epay / Alipay / WeChat",

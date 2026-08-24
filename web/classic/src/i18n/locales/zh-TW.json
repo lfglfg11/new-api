@@ -3682,7 +3682,12 @@
     "按秒计费": "按秒計費",
     "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "一般按量、按次或按秒計費可直接填寫價格；若價格需依請求參數或請求標頭變動，請切換到表達式／階梯計費。",
     "输入每秒价格": "輸入每秒價格",
-    "适合 /v1/videos 等按生成秒数收费的异步模型。": "適合 /v1/videos 等依生成秒數收費的非同步模型。"
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "適合 /v1/videos 等依生成秒數收費的非同步模型。",
+    "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.": "有效登入工作階段數量已達上限。請在一台已登入的裝置上開啟「登入工作階段」，使用「登出其他工作階段」將其撤銷。如果無法存取任何已登入裝置，請重設密碼以登出所有工作階段。",
+    "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.": "近期建立的登入工作階段過多。請等待滾動時間視窗結束後再試。",
+    "Too many login attempts. Please wait {{seconds}} seconds and try again.": "登入請求過於頻繁。請等待 {{seconds}} 秒後重試。",
+    "Too many login attempts. Please try again later.": "登入請求過於頻繁，請稍後再試。",
+    "Login failed. Please try again.": "登入失敗，請重試。"
   },
   "Epay / Alipay / WeChat": "易支付 / 支付寶 / 微信",
   "易支付/支付宝/微信": "易支付/支付宝/微信",

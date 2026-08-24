@@ -4223,7 +4223,12 @@
     "按秒计费": "Tính phí theo giây",
     "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "Nhập giá trực tiếp cho hình thức tính theo mức dùng, theo lượt hoặc theo giây. Nếu giá phụ thuộc vào tham số hay header của yêu cầu, hãy dùng biểu thức/bậc giá.",
     "输入每秒价格": "Nhập giá mỗi giây",
-    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Phù hợp với các mô hình bất đồng bộ như /v1/videos tính phí theo số giây được tạo."
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "Phù hợp với các mô hình bất đồng bộ như /v1/videos tính phí theo số giây được tạo.",
+    "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.": "Đã đạt giới hạn phiên đăng nhập đang hoạt động. Trên một thiết bị đã đăng nhập, hãy mở “Phiên đăng nhập” và dùng “Đăng xuất các phiên khác” để thu hồi chúng. Nếu bạn không thể truy cập thiết bị nào đã đăng nhập, hãy đặt lại mật khẩu để đăng xuất khỏi tất cả phiên.",
+    "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.": "Đã tạo quá nhiều phiên đăng nhập gần đây. Vui lòng chờ cửa sổ trượt kết thúc rồi thử lại.",
+    "Too many login attempts. Please wait {{seconds}} seconds and try again.": "Có quá nhiều lần đăng nhập. Vui lòng đợi {{seconds}} giây rồi thử lại.",
+    "Too many login attempts. Please try again later.": "Có quá nhiều lần đăng nhập. Vui lòng thử lại sau.",
+    "Login failed. Please try again.": "Đăng nhập thất bại. Vui lòng thử lại."
   },
   "Epay / Alipay / WeChat": "Epay / Alipay / WeChat",
   "易支付/支付宝/微信": "Epay / Alipay / WeChat",

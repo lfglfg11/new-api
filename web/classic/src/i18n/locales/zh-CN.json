@@ -3818,7 +3818,12 @@
     "按秒计费": "按秒计费",
     "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。": "普通按量/按次/按秒直接填价格就行；如果价格要跟请求参数或请求头联动，请切到表达式/阶梯计费。",
     "输入每秒价格": "输入每秒价格",
-    "适合 /v1/videos 等按生成秒数收费的异步模型。": "适合 /v1/videos 等按生成秒数收费的异步模型。"
+    "适合 /v1/videos 等按生成秒数收费的异步模型。": "适合 /v1/videos 等按生成秒数收费的异步模型。",
+    "Too many active login sessions. On a device where you are already signed in, open Login sessions and use “Sign out other sessions” to revoke them. If you cannot access a signed-in device, reset your password to sign out all sessions.": "活跃登录会话数量已达上限。请在一台已登录的设备上打开“登录会话”，使用“退出其他登录会话”将其撤销。如果无法访问任何已登录设备，请重置密码以退出所有会话。",
+    "Too many login sessions were created recently. Please wait for the rolling window to pass, then try again.": "近期创建的登录会话过多。请等待滚动时间窗口结束后再试。",
+    "Too many login attempts. Please wait {{seconds}} seconds and try again.": "登录请求过于频繁。请等待 {{seconds}} 秒后重试。",
+    "Too many login attempts. Please try again later.": "登录请求过于频繁，请稍后再试。",
+    "Login failed. Please try again.": "登录失败，请重试。"
   },
   "Epay / Alipay / WeChat": "易支付 / 支付宝 / 微信",
   "易支付/支付宝/微信": "易支付/支付宝/微信",

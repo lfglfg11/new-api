@@ -16,7 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { API, showError, showSuccess } from '../../helpers';
+import {
+  API,
+  getAuthErrorMessage,
+  showError,
+  showSuccess,
+} from '../../helpers';
 import {
   Button,
   Card,
@@ -69,7 +74,7 @@ const TwoFAVerification = ({
           code: verificationCode,
           flow_token: flowToken,
         },
-        { skipAuthRefresh: true },
+        { skipAuthRefresh: true, skipErrorHandler: true },
       );
 
       if (res.data.success) {
@@ -79,7 +84,7 @@ const TwoFAVerification = ({
         showError(res.data.message);
       }
     } catch (error) {
-      showError('验证失败，请重试');
+      showError(getAuthErrorMessage(error, t));
     } finally {
       setLoading(false);
     }

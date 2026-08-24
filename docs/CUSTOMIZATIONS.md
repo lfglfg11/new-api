@@ -555,6 +555,77 @@ GET /login?expired=true 200
 - [ ] 卡片原有复制、选择和打开详情操作不受影响。
 - [ ] Classic 执行定向 Prettier 检查、`bun run build` 和 `git diff --check`。
 
+### 4.13 登录、Refresh 与其他关键接口必须使用隔离限流桶
+
+#### 背景与生产根因
+
+生产环境虽然把 `GLOBAL_API_RATE_LIMIT` 提高到了较大值，但认证请求仍会经过默认 Critical 限流（`20 次 / 1200 秒`）。旧实现中所有 `CriticalRateLimit()` 路由都共用同一个按 IP 计数的 Redis 键：
+
+```text
+rateLimit:v2:ip:CT:<client-ip>
+```
+
+当用户已达到活跃登录会话上限时，密码登录会返回 `409 AUTH_SESSION_LIMIT`；用户因 Classic 只显示通用 409 错误而连续重试后，这些失败请求仍会消耗共享 `CT` 桶。共享桶耗尽后，合法的 Refresh、登录、注册、OAuth、密码重置乃至其他关键操作都会在窗口剩余时间内返回 429，形成“菜单切换后像被退出、随后很久无法登录”的连锁故障。
+
+#### 长期业务不变量
+
+> 登录暴力破解保护必须保留，但失败登录不得污染合法 Refresh、Logout 或其他无关关键操作的限流额度；Refresh 的暂时性 429 不能清除 Classic 登录态，登录页必须显示可操作的会话上限和等待时间提示。
+
+必须保留：
+
+- `CriticalRateLimit()` 的空 scope 继续使用原 `CT` 桶，未迁移的上游路由保持兼容。
+- 登录相关入口（密码、2FA、Passkey、微信、Telegram）共用 `CT:auth-login`，避免通过不同登录形式绕过同一登录保护。
+- Refresh 独占 `CT:auth-refresh`，默认 `120 次 / 1200 秒`；可通过 `AUTH_REFRESH_RATE_LIMIT`、`AUTH_REFRESH_RATE_LIMIT_DURATION` 调整，并继续受 `CRITICAL_RATE_LIMIT_ENABLE` 控制。
+- Logout、注册、OAuth、密码重置分别使用独立 scope，不能再因登录失败或 `/api/ratio_config` 等旧 Critical 路由耗尽而被连带封锁。
+- Redis 和内存限流实现必须使用同样的 scope 语义；429 继续返回 `Retry-After`。
+- 不能通过提高 `GLOBAL_API_RATE_LIMIT` 代替本隔离方案，因为 Global API 与 Critical 是不同的计数桶。
+- Classic 的 Refresh 对网络失败、5xx、429 保持 `transient_error`，不得删除用户资料或强制跳转登录页。
+- Classic 登录、2FA、Passkey、微信和 Telegram 登录错误由页面统一处理，避免 Axios 拦截器与组件重复弹 Toast。
+- `AUTH_SESSION_LIMIT` 必须提示用户在已登录设备进入“登录会话”并退出其他会话；无可用已登录设备时提示通过重置密码撤销全部会话。
+- `AUTH_SESSION_ISSUANCE_LIMIT` 必须说明近期创建会话过多，需要等待滚动窗口结束。
+- 普通 429 优先读取 `Retry-After` 并显示剩余秒数；不得只显示 Axios 的状态码文本。
+
+#### 当前实现路径
+
+- `common/constants.go`、`common/init.go`
+  - `AuthRefreshRateLimitNum`
+  - `AuthRefreshRateLimitDuration`
+  - `AUTH_REFRESH_RATE_LIMIT`
+  - `AUTH_REFRESH_RATE_LIMIT_DURATION`
+- `middleware/rate-limit.go`
+  - `CriticalRateLimit()` 保留原 `CT` 行为
+  - `ScopedCriticalRateLimit(scope)`
+  - `AuthRefreshRateLimit()`
+- `middleware/rate_limit_test.go`
+  - 登录、Refresh、旧 `CT` 三类桶的隔离、阈值与 `Retry-After` 回归测试
+- `router/api-router.go`
+  - 认证入口的 scope 分配
+- `web/classic/src/helpers/auth-error-message.js`
+  - 认证错误码与 `Retry-After` 的用户提示映射
+- `web/classic/src/components/auth/LoginForm.jsx`
+- `web/classic/src/components/auth/TwoFAVerification.jsx`
+- `web/classic/src/i18n/locales/{en,zh-CN,zh-TW,fr,ja,ru,vi}.json`
+
+#### 上游同步保留策略
+
+- 若上游重构限流中间件，优先迁移“业务 scope 隔离”而不是机械保留函数名；验收重点是 Redis/内存键空间和路由分组行为。
+- 若上游新增登录方式，该入口必须加入 `auth-login` 共享桶；不能为每种登录方式创建互相独立、可绕过的暴力破解额度。
+- 若上游调整 Refresh 协议或端点，新的 Refresh 入口仍须使用独立高容量桶，且不能退回通用 `CT`。
+- 若上游为 429 增加标准 JSON 错误体，Classic 可优先显示上游消息，但必须继续兼容只有 `Retry-After`、无响应体的情况。
+- 若上游完善 Classic 或统一前端错误映射，可复用上游实现，但必须逐项核对 `AUTH_SESSION_LIMIT`、`AUTH_SESSION_ISSUANCE_LIMIT`、429 等待秒数和避免重复 Toast 的行为完全等价后，才能删除本地 helper。
+
+#### 可重复验收
+
+- [ ] 同一 IP 连续请求登录直至 `auth-login` 返回 429 后，`POST /api/user/auth/refresh` 仍可在其独立额度内成功。
+- [ ] 同一 IP 耗尽旧 `CT` 桶（例如未迁移的 Critical 路由）后，登录与 Refresh 独立桶仍不受影响。
+- [ ] 2FA、Passkey、微信、Telegram 与密码登录共同消耗 `auth-login`，不能互相绕过登录保护。
+- [ ] Refresh 默认允许 120 次 / 1200 秒，超限时返回 429 和正确 `Retry-After`；修改两个环境变量后阈值与窗口同步变化。
+- [ ] 429 Refresh 不清除 Classic 用户状态；服务恢复或窗口结束后可以继续 Refresh。
+- [ ] Classic 遇到 `AUTH_SESSION_LIMIT` 时显示撤销其他会话/重置密码的明确说明。
+- [ ] Classic 遇到 `AUTH_SESSION_ISSUANCE_LIMIT` 时显示滚动窗口等待说明。
+- [ ] Classic 遇到限流 429 时显示 `Retry-After` 剩余秒数，且同一错误只弹一次 Toast。
+- [ ] `go test ./middleware ./router -count=1`、`go build ./...`、Classic 定向 Prettier 和 `bun run build` 通过。
+
 ## 5. 条件性构建兼容项（按上游现状判断）
 
 以下内容来自历史合并或构建修复，但不是稳定的独立业务需求。未来同步时不能无脑保留旧实现；只有上游当前结构仍然需要时才继续保留：
@@ -687,6 +758,14 @@ bun run build
 - [ ] `TokenAuthReadOnly` 与普通 Token 鉴权行为一致。
 - [ ] 最高权限管理员无需 2FA / Passkey 即可查看已添加渠道的密钥。
 - [ ] 普通用户或非授权管理员不能访问渠道密钥接口。
+
+### 认证与限流
+
+- [ ] 登录、2FA、Passkey、微信和 Telegram 登录共同使用 `auth-login` 桶。
+- [ ] 登录桶耗尽不会阻止合法 Refresh，旧 `CT` 桶耗尽也不会阻止登录或 Refresh。
+- [ ] Refresh 使用独立默认 `120 次 / 1200 秒`，429 带正确 `Retry-After`。
+- [ ] Refresh 的网络错误、5xx、429 不清除 Classic 登录态。
+- [ ] `AUTH_SESSION_LIMIT`、`AUTH_SESSION_ISSUANCE_LIMIT` 和普通 429 在 Classic 中显示可操作提示且不重复弹 Toast。
 
 ### 支付
 

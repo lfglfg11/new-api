@@ -172,10 +172,35 @@ func GlobalAPIRateLimit() func(c *gin.Context) {
 }
 
 func CriticalRateLimit() func(c *gin.Context) {
-	if common.CriticalRateLimitEnable {
-		return rateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, "CT")
+	return ScopedCriticalRateLimit("")
+}
+
+// ScopedCriticalRateLimit keeps the existing critical limit settings while
+// isolating unrelated sensitive operations into separate per-IP buckets.
+// An empty scope intentionally preserves the legacy "CT" bucket.
+func ScopedCriticalRateLimit(scope string) func(c *gin.Context) {
+	if !common.CriticalRateLimitEnable {
+		return defNext
 	}
-	return defNext
+	mark := "CT"
+	if scope != "" {
+		mark += ":" + scope
+	}
+	return rateLimitFactory(common.CriticalRateLimitNum, common.CriticalRateLimitDuration, mark)
+}
+
+// AuthRefreshRateLimit uses a dedicated, higher-capacity bucket so failed
+// login attempts and unrelated critical actions cannot block a valid browser
+// session refresh. It remains governed by CRITICAL_RATE_LIMIT_ENABLE.
+func AuthRefreshRateLimit() func(c *gin.Context) {
+	if !common.CriticalRateLimitEnable {
+		return defNext
+	}
+	return rateLimitFactory(
+		common.AuthRefreshRateLimitNum,
+		common.AuthRefreshRateLimitDuration,
+		"CT:auth-refresh",
+	)
 }
 
 func UserCriticalRateLimit(scope string) func(c *gin.Context) {

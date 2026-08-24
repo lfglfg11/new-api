@@ -73,6 +73,62 @@ func TestRedisIPRateLimiterThresholdTTLAndNamespace(t *testing.T) {
 	assert.True(t, redisServer.Exists(legacyKey), "the v2 counter must not touch an old list key")
 }
 
+func TestScopedCriticalRateLimitsKeepLoginRefreshAndLegacyBucketsIndependent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	redisServer, _ := useRateLimitMiniRedis(t)
+
+	previousCriticalEnabled := common.CriticalRateLimitEnable
+	previousCriticalNum := common.CriticalRateLimitNum
+	previousCriticalDuration := common.CriticalRateLimitDuration
+	previousRefreshNum := common.AuthRefreshRateLimitNum
+	previousRefreshDuration := common.AuthRefreshRateLimitDuration
+	common.CriticalRateLimitEnable = true
+	common.CriticalRateLimitNum = 1
+	common.CriticalRateLimitDuration = 43
+	common.AuthRefreshRateLimitNum = 2
+	common.AuthRefreshRateLimitDuration = 47
+	t.Cleanup(func() {
+		common.CriticalRateLimitEnable = previousCriticalEnabled
+		common.CriticalRateLimitNum = previousCriticalNum
+		common.CriticalRateLimitDuration = previousCriticalDuration
+		common.AuthRefreshRateLimitNum = previousRefreshNum
+		common.AuthRefreshRateLimitDuration = previousRefreshDuration
+	})
+
+	router := gin.New()
+	require.NoError(t, router.SetTrustedProxies(nil))
+	router.GET("/login", ScopedCriticalRateLimit("auth-login"), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	router.GET("/refresh", AuthRefreshRateLimit(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+	router.GET("/legacy", CriticalRateLimit(), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	remoteAddr := "192.0.2.15:12345"
+	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/login", remoteAddr).Code)
+	loginLimited := performRateLimitRequest(router, "/login", remoteAddr)
+	assert.Equal(t, http.StatusTooManyRequests, loginLimited.Code)
+	assert.Equal(t, "43", loginLimited.Header().Get("Retry-After"))
+
+	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/refresh", remoteAddr).Code)
+	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/refresh", remoteAddr).Code)
+	refreshLimited := performRateLimitRequest(router, "/refresh", remoteAddr)
+	assert.Equal(t, http.StatusTooManyRequests, refreshLimited.Code)
+	assert.Equal(t, "47", refreshLimited.Header().Get("Retry-After"))
+
+	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/legacy", remoteAddr).Code)
+	legacyLimited := performRateLimitRequest(router, "/legacy", remoteAddr)
+	assert.Equal(t, http.StatusTooManyRequests, legacyLimited.Code)
+	assert.Equal(t, "43", legacyLimited.Header().Get("Retry-After"))
+
+	assert.True(t, redisServer.Exists(redisIPRateLimitKey("CT:auth-login", "192.0.2.15")))
+	assert.True(t, redisServer.Exists(redisIPRateLimitKey("CT:auth-refresh", "192.0.2.15")))
+	assert.True(t, redisServer.Exists(redisIPRateLimitKey("CT", "192.0.2.15")))
+}
+
 func TestRedisUserRateLimiterUsesSharedFixedWindow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	redisServer, _ := useRateLimitMiniRedis(t)
