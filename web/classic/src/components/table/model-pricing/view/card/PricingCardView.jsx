@@ -28,7 +28,7 @@ import {
   Button,
   Avatar,
 } from '@douyinfe/semi-ui';
-import { IconHelpCircle } from '@douyinfe/semi-icons';
+import { IconEdit, IconHelpCircle } from '@douyinfe/semi-icons';
 import { Copy } from 'lucide-react';
 import {
   IllustrationNoResult,
@@ -77,6 +77,8 @@ const PricingCardView = ({
   selectedRowKeys = [],
   setSelectedRowKeys,
   openModelDetail,
+  canManageModels = false,
+  openModelCreate,
 }) => {
   const showSkeleton = useMinimumLoadingTime(loading);
   const startIndex = (currentPage - 1) * pageSize;
@@ -287,6 +289,22 @@ const PricingCardView = ({
                   </div>
 
                   <div className='flex items-center space-x-2 ml-3'>
+                    {canManageModels && openModelCreate && (
+                      <Tooltip content={t('编辑模型')}>
+                        <Button
+                          size='small'
+                          theme='outline'
+                          type='primary'
+                          icon={<IconEdit />}
+                          aria-label={t('编辑模型')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openModelCreate(model.model_name);
+                          }}
+                        />
+                      </Tooltip>
+                    )}
+
                     {/* 复制按钮 */}
                     <Button
                       size='small'

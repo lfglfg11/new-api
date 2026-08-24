@@ -22,6 +22,7 @@ import { Layout, ImagePreview } from '@douyinfe/semi-ui';
 import PricingSidebar from './PricingSidebar';
 import PricingContent from './content/PricingContent';
 import ModelDetailSideSheet from '../modal/ModelDetailSideSheet';
+import EditModelModal from '../../models/modals/EditModelModal';
 import { useModelPricingData } from '../../../../hooks/model-pricing/useModelPricingData';
 import { useIsMobile } from '../../../../hooks/common/useIsMobile';
 
@@ -31,12 +32,22 @@ const PricingPage = () => {
   const isMobile = useIsMobile();
   const [showRatio, setShowRatio] = React.useState(false);
   const [viewMode, setViewMode] = React.useState('card');
+  const [quickCreateModel, setQuickCreateModel] = React.useState(null);
+  const canManageModels = (pricingData.userState?.user?.role || 0) >= 10;
+  const openModelCreate = React.useCallback((modelName) => {
+    setQuickCreateModel({ id: undefined, model_name: modelName });
+  }, []);
+  const closeModelCreate = React.useCallback(() => {
+    setQuickCreateModel(null);
+  }, []);
   const allProps = {
     ...pricingData,
     showRatio,
     setShowRatio,
     viewMode,
     setViewMode,
+    canManageModels,
+    openModelCreate,
   };
 
   return (
@@ -79,6 +90,15 @@ const PricingPage = () => {
         autoGroups={pricingData.autoGroups}
         t={pricingData.t}
       />
+
+      {canManageModels && (
+        <EditModelModal
+          refresh={pricingData.refresh}
+          editingModel={quickCreateModel || { id: undefined }}
+          visiable={Boolean(quickCreateModel)}
+          handleClose={closeModelCreate}
+        />
+      )}
     </div>
   );
 };
