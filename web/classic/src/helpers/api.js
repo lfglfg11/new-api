@@ -23,19 +23,26 @@ import {
   formatMessageForAPI,
   isValidMessage,
 } from './utils';
+import {
+  clearAuthentication,
+  getAccessToken,
+  getAuthSessionId,
+  logoutAuthentication,
+  refreshAuthentication,
+} from './auth-session';
 import axios from 'axios';
+import { t } from 'i18next';
 import { MESSAGE_ROLES } from '../constants/playground.constants';
 
-export let API = axios.create({
-  baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
-    ? import.meta.env.VITE_REACT_APP_SERVER_URL
-    : '',
-  headers: {
-    'New-API-User': getUserIdFromLocalStorage(),
-    'Cache-Control': 'no-store',
-  },
-});
+const serverBaseURL = import.meta.env.VITE_REACT_APP_SERVER_URL
+  ? import.meta.env.VITE_REACT_APP_SERVER_URL
+  : '';
 
+function redirectToLogin() {
+  if (window.location.pathname !== '/login') {
+    window.location.replace('/login?expired=true');
+  }
+}
 
 function redirectToOAuthUrl(url, options = {}) {
   const { openInNewTab = false } = options;
@@ -49,14 +56,14 @@ function redirectToOAuthUrl(url, options = {}) {
   window.location.assign(targetUrl);
 }
 
-
 function patchAPIInstance(instance) {
   const originalGet = instance.get.bind(instance);
   const inFlightGetRequests = new Map();
 
   const genKey = (url, config = {}) => {
     const params = config.params ? JSON.stringify(config.params) : '{}';
-    return `${url}?${params}`;
+    const sessionID = getAuthSessionId() || 'anonymous';
+    return `${sessionID}:${url}?${params}`;
   };
 
   instance.get = (url, config = {}) => {
@@ -76,36 +83,84 @@ function patchAPIInstance(instance) {
     inFlightGetRequests.set(key, reqPromise);
     return reqPromise;
   };
+
+  instance.interceptors.request.use((config) => {
+    const accessToken = getAccessToken();
+    const userID = getUserIdFromLocalStorage();
+    if (accessToken) {
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    }
+    if (userID) {
+      config.headers['New-API-User'] = userID;
+    }
+    return config;
+  });
+
+  instance.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+      const config = error?.config;
+      const status = error?.response?.status;
+
+      if (
+        status === 401 &&
+        config &&
+        !config.skipAuthRefresh &&
+        !config.authRetry
+      ) {
+        config.authRetry = true;
+        const outcome = await refreshAuthentication();
+        if (outcome.kind === 'authenticated') {
+          const accessToken = getAccessToken();
+          if (accessToken) {
+            config.headers = {
+              ...config.headers,
+              Authorization: `Bearer ${accessToken}`,
+            };
+          }
+          return instance.request(config);
+        }
+
+        if (outcome.kind === 'anonymous' || outcome.kind === 'out_of_sync') {
+          clearAuthentication();
+          if (!config.skipErrorHandler) redirectToLogin();
+        } else if (!config.skipErrorHandler) {
+          showError(t('请求失败'));
+        }
+        return Promise.reject(error);
+      }
+
+      if (status === 401 && config?.authRetry) {
+        clearAuthentication();
+        if (!config.skipErrorHandler) redirectToLogin();
+        return Promise.reject(error);
+      }
+
+      if (!config?.skipErrorHandler) {
+        showError(error);
+      }
+      return Promise.reject(error);
+    },
+  );
 }
 
-patchAPIInstance(API);
-
-export function updateAPI() {
-  API = axios.create({
-    baseURL: import.meta.env.VITE_REACT_APP_SERVER_URL
-      ? import.meta.env.VITE_REACT_APP_SERVER_URL
-      : '',
+function createAPIInstance() {
+  const instance = axios.create({
+    baseURL: serverBaseURL,
+    withCredentials: true,
     headers: {
-      'New-API-User': getUserIdFromLocalStorage(),
       'Cache-Control': 'no-store',
     },
   });
-
-  patchAPIInstance(API);
+  patchAPIInstance(instance);
+  return instance;
 }
 
-API.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // 如果请求配置中显式要求跳过全局错误处理，则不弹出默认错误提示
-    if (error.config && error.config.skipErrorHandler) {
-      return Promise.reject(error);
-    }
-    showError(error);
-    return Promise.reject(error);
-  },
-);
+export let API = createAPIInstance();
 
+export function updateAPI() {
+  API = createAPIInstance();
+}
 // playground
 
 // 构建API请求负载
@@ -240,36 +295,42 @@ export const processGroupsData = (data, userGroup) => {
 
 // 原来components中的utils.js
 
-export async function getOAuthState() {
-  let path = '/api/oauth/state';
-  let affCode = localStorage.getItem('aff');
-  if (affCode && affCode.length > 0) {
-    path += `?aff=${affCode}`;
-  }
-  const res = await API.get(path);
+export async function getOAuthState(provider, intent = 'login') {
+  const affCode = intent === 'login' ? localStorage.getItem('aff') : '';
+  const res = await API.post(
+    '/api/oauth/state',
+    {
+      provider,
+      intent,
+      aff: affCode || undefined,
+    },
+    { skipAuthRefresh: intent === 'login' },
+  );
   const { success, message, data } = res.data;
   if (success) {
-    return data;
-  } else {
-    showError(message);
-    return '';
+    if (typeof data === 'string') return data;
+    if (typeof data?.flow_token === 'string') return data.flow_token;
   }
+  showError(message || t('授权失败'));
+  return '';
 }
 
-async function prepareOAuthState(options = {}) {
+async function prepareOAuthState(provider, options = {}) {
   const { shouldLogout = false } = options;
+  const intent = shouldLogout ? 'login' : 'bind';
   if (shouldLogout) {
     try {
-      await API.get('/api/user/logout', { skipErrorHandler: true });
-    } catch (err) {}
-    localStorage.removeItem('user');
+      await logoutAuthentication();
+    } catch (error) {
+      clearAuthentication();
+    }
     updateAPI();
   }
-  return await getOAuthState();
+  return await getOAuthState(provider, intent);
 }
 
 export async function onDiscordOAuthClicked(client_id, options = {}) {
-  const state = await prepareOAuthState(options);
+  const state = await prepareOAuthState('discord', options);
   if (!state) return;
   const redirect_uri = `${window.location.origin}/oauth/discord`;
   const response_type = 'code';
@@ -285,7 +346,7 @@ export async function onOIDCClicked(
   openInNewTab = false,
   options = {},
 ) {
-  const state = await prepareOAuthState(options);
+  const state = await prepareOAuthState('oidc', options);
   if (!state) return;
   const url = new URL(auth_url);
   url.searchParams.set('client_id', client_id);
@@ -297,7 +358,7 @@ export async function onOIDCClicked(
 }
 
 export async function onGitHubOAuthClicked(github_client_id, options = {}) {
-  const state = await prepareOAuthState(options);
+  const state = await prepareOAuthState('github', options);
   if (!state) return;
   redirectToOAuthUrl(
     `https://github.com/login/oauth/authorize?client_id=${github_client_id}&state=${state}&scope=user:email`,
@@ -308,7 +369,7 @@ export async function onLinuxDOOAuthClicked(
   linuxdo_client_id,
   options = { shouldLogout: false },
 ) {
-  const state = await prepareOAuthState(options);
+  const state = await prepareOAuthState('linuxdo', options);
   if (!state) return;
   redirectToOAuthUrl(
     `https://connect.linux.do/oauth2/authorize?response_type=code&client_id=${linuxdo_client_id}&state=${state}`,
@@ -326,7 +387,7 @@ export async function onLinuxDOOAuthClicked(
  * @param {boolean} options.shouldLogout - Whether to logout first
  */
 export async function onCustomOAuthClicked(provider, options = {}) {
-  const state = await prepareOAuthState(options);
+  const state = await prepareOAuthState(provider.slug, options);
   if (!state) return;
 
   try {

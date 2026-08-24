@@ -20,13 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useContext, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  API,
-  showError,
-  showSuccess,
-  updateAPI,
-  setUserData,
-} from '../../helpers';
+import { API, applyAuthBundle, showError, showSuccess } from '../../helpers';
 import { UserContext } from '../../context/User';
 import Loading from '../common/ui/Loading';
 
@@ -35,7 +29,7 @@ const OAuth2Callback = (props) => {
   const [searchParams] = useSearchParams();
   const [, userDispatch] = useContext(UserContext);
   const navigate = useNavigate();
-  
+
   // 防止 React 18 Strict Mode 下重复执行
   const hasExecuted = useRef(false);
 
@@ -60,10 +54,7 @@ const OAuth2Callback = (props) => {
         showSuccess(t('绑定成功！'));
         navigate('/console/personal');
       } else {
-        userDispatch({ type: 'login', payload: data });
-        localStorage.setItem('user', JSON.stringify(data));
-        setUserData(data);
-        updateAPI();
+        applyAuthBundle(data, userDispatch);
         showSuccess(t('登录成功！'));
         navigate('/console/token');
       }

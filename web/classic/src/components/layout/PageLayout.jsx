@@ -34,6 +34,7 @@ import {
   getSystemName,
   showError,
   setStatusData,
+  bootstrapAuthentication,
 } from '../../helpers';
 import { UserContext } from '../../context/User';
 import { StatusContext } from '../../context/Status';
@@ -104,6 +105,7 @@ const PageLayout = () => {
 
   useEffect(() => {
     loadUser();
+    bootstrapAuthentication(userDispatch).catch(console.error);
     loadStatus().catch(console.error);
     let systemName = getSystemName();
     if (systemName) {

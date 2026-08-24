@@ -24,7 +24,7 @@
 以下信息是 **2026-08-24** 整理本文时的快照，仅用于定位历史，后续同步后应更新：
 
 - 二开分支：`hub`
-- `hub` 提交：`9d3be0d9a`
+- `hub` 当前提交：`74a6dec3c`（已合入本轮 `hub-merge-upstream`；同步前二开输入为 `9d3be0d9a`）
 - 当时的 `main` / `upstream/main`：`2d8e50bf3`
 - 当时 `git merge-base upstream/main hub`：`7c28993f6`
 - `hub` 最后吸收的上游基线约为 2026-07-12；整理时上游已经前进到 2026-08-24。
@@ -410,6 +410,93 @@ git merge main
 
 上游可能继续直接用 `TASK_PRICE_PATCH` 判断是否跳过任务倍率，也可能重构模型广场或模型定价编辑器。同步时不能只保留环境变量兼容分支，必须保留“显式系统设置优先、环境变量仅作未配置时兜底”的业务优先级，并确认展示单位、保存值和实际预扣费使用同一解析结果。
 
+### 4.11 Classic UI 必须适配 Dashboard 无状态认证协议
+
+#### 背景与根因
+
+上游认证提交 `31d70fca3` 将 Dashboard 登录从旧 Session 协议迁移为 Auth Bundle、短期 Access Token、HttpOnly Refresh Cookie 和可控登录会话。Classic UI 虽然作为二开被保留，但旧代码仍把登录接口整个 `data` 当作用户对象写入 `localStorage`，后续请求也没有携带 `Authorization: Bearer ...`。生产环境因此出现：
+
+```text
+POST /api/user/login 200
+GET /console 200
+GET /api/user/self 401
+GET /login?expired=true 200
+```
+
+这类问题不是“Classic 静态资源没打包”，而是“UI 外观保留了、认证协议没有一起迁移”。
+
+#### 长期业务不变量
+
+> 保留 Classic UI 时，必须持续适配上游 Dashboard 无状态 Token 协议，包括 Auth Bundle、内存 Access Token、HttpOnly Refresh Cookie bootstrap、Bearer 请求头、401 单次刷新重试、Session mismatch/race、2FA flow token、Passkey flow token、OAuth state POST 协议和新注销端点。后续同步上游时不能只保留 UI 外观而遗漏认证协议。
+
+必须保留：
+
+- 登录成功响应按 Auth Bundle 解析，只把 `bundle.user` 作为 Classic 用户资料保存；不能把 `access_token`、`session` 等整个 Bundle 当用户对象写入 `localStorage.user`。
+- Access Token 只保存在页面运行时内存，不写 localStorage；刷新页面后通过同源 HttpOnly Refresh Cookie 调用 `POST /api/user/auth/refresh` 恢复。
+- Classic API 客户端必须启用 `withCredentials`，受保护请求动态附加 Bearer；`New-API-User` 继续从当前用户资料读取以兼容后端请求约束。
+- 普通 API 收到 401 时最多执行一次 Refresh 和一次原请求重试，避免无限循环。
+- 并发 Refresh 必须单飞；`AUTH_REFRESH_RACE` 按短延迟有限重试，`AUTH_SESSION_MISMATCH` 清除旧 SID 后只允许一次无 SID 恢复。
+- Refresh 返回 401 或确认会话失步时才能清理认证并跳转 `/login?expired=true`；网络失败、429、5xx 等暂时性错误不能直接删除用户登录态。
+- 2FA 登录必须把初次密码登录返回的 `flow_token` 提交到 `/api/user/login/2fa`。
+- Passkey 登录 begin 返回的 `flow_token` 必须和 `credential` 一起提交到 `/api/user/passkey/login/finish`。
+- OAuth state 必须使用 `POST /api/oauth/state`，请求体包含正确的 `provider`、`intent=login|bind` 和登录场景的 `aff`；登录回调必须按 Auth Bundle 落地。
+- 注销必须调用 `POST /api/user/auth/logout`，并携带当前 Bearer/SID；不得恢复已删除的旧 `GET /api/user/logout`。
+- `updateAPI()` 重建 Axios 实例时必须重新安装请求、401 Refresh、错误处理和 GET 去重逻辑，不能退回只设置静态头的旧实现。
+
+#### 当前实现路径
+
+- `web/classic/src/helpers/auth-session.js`
+  - 内存认证状态、Auth Bundle 校验和落地
+  - Refresh 单飞、race/mismatch 恢复、bootstrap、logout
+- `web/classic/src/helpers/api.js`
+  - `withCredentials`、动态 Bearer、401 单次刷新重试
+  - OAuth state POST 与 provider/intent/aff
+- `web/classic/src/helpers/auth.jsx`
+  - `authHeader()` 从运行时 Access Token 生成 Bearer
+- `web/classic/src/components/auth/LoginForm.jsx`
+- `web/classic/src/components/auth/TwoFAVerification.jsx`
+- `web/classic/src/components/auth/OAuth2Callback.jsx`
+- `web/classic/src/components/auth/RegisterForm.jsx`
+  - 密码、微信、Telegram、OAuth、2FA、Passkey 登录入口
+- `web/classic/src/components/layout/PageLayout.jsx`
+  - 页面启动 Refresh Cookie bootstrap
+- `web/classic/src/hooks/common/useHeaderBar.js`
+- `web/classic/src/components/settings/PersonalSetting.jsx`
+  - 新注销协议与账户删除后的本地认证清理
+
+#### 上游同步保留策略
+
+每次上游修改 `controller/auth_session.go`、`controller/user.go`、`controller/twofa.go`、`controller/passkey.go`、`controller/oauth.go`、`router/api-router.go`、`middleware/auth*.go` 或新 UI 的 `web/src/lib/auth-session.ts` / `web/src/features/auth/` 时：
+
+1. 先以新 UI 当前实现和后端接口为协议基准，列出登录、Refresh、会话、2FA、Passkey、OAuth、注销的请求/响应变化。
+2. 再把等价行为迁移到 `web/classic`，不要直接复制依赖 Zustand、TanStack Query 或路径别名的代码。
+3. 冲突处理不得选择“保留 Classic 旧文件即完成”；需要逐项完成下方验收。
+4. Access Token 的长期存储策略不可为了省事改回 localStorage。
+
+#### 可重复验收
+
+- [ ] 密码登录成功后 `localStorage.user` 只包含用户资料，不包含 Access Token；`/api/user/self` 带 Bearer 并返回 200。
+- [ ] 刷新 `/console` 后，Classic 通过 HttpOnly Refresh Cookie 恢复 Access Token，不白屏、不误跳登录。
+- [ ] Access Token 过期后只发生一次 `401 -> Refresh -> 原请求重试`，最终请求成功。
+- [ ] Refresh Cookie 失效时才清理用户并跳转 `/login?expired=true`；Refresh 5xx、429、网络故障不会立即登出。
+- [ ] `AUTH_REFRESH_RACE` 和 `AUTH_SESSION_MISMATCH` 均按有限恢复策略处理，无刷新风暴或无限循环。
+- [ ] 2FA 请求携带初次登录返回的 `flow_token`。
+- [ ] Passkey finish 请求携带 `flow_token + credential`。
+- [ ] GitHub、Discord、OIDC、LinuxDO、自定义 OAuth 使用正确 provider；登录用 `intent=login`，账户绑定用 `intent=bind`。
+- [ ] 注销调用 `POST /api/user/auth/logout`，成功后内存认证和 `localStorage.user` 均被清理。
+- [ ] Classic 首页、登录页、控制台、账户设置仍能正常显示和操作。
+
+#### 基线与验证记录（2026-08-24）
+
+- 上游无状态认证基线：`31d70fca3`
+- 本轮上游同步基线：`2d8e50bf3`
+- 当前 `hub` 基线：`74a6dec3c`
+- Classic `bun run build`：通过。
+- 根模块 `go build ./...`：通过。
+- 本次修改文件定向 `prettier --check`：通过。
+- `bun run eslint`：未通过，原因是项目现有 ESLint/AJV 依赖初始化错误（`defaultMeta` / `missingRefs`），不是本次 JSX/JS 构建错误。
+- 全目录 `bun run lint`：未通过，包含项目既有未格式化文件；曾与构建并行扫描 `dist` 临时文件。本次修改文件应使用定向 `prettier --check` 验证。
+- 生产镜像尚未包含本修复；在新 `hub` 镜像发布并重新拉取前，服务器继续运行旧行为。
 ## 5. 条件性构建兼容项（按上游现状判断）
 
 以下内容来自历史合并或构建修复，但不是稳定的独立业务需求。未来同步时不能无脑保留旧实现；只有上游当前结构仍然需要时才继续保留：
@@ -644,7 +731,7 @@ git log --oneline $(git merge-base upstream/main hub)..hub
 - 二开输入：`hub@9d3be0d9a`
 - 上游输入：`main/upstream-main@2d8e50bf3`
 - 中间分支：`hub-merge-upstream`
-- 本轮只完成中间分支合并，不合回 `hub`，不 push。
+- 本轮先在中间分支完成检查，随后已按用户确认合回 `hub`；当前 `hub` merge commit 为 `74a6dec3c`，未在本次 Classic 认证修复中执行 push。
 
 ### 二开保留结果
 
@@ -671,6 +758,7 @@ git log --oneline $(git merge-base upstream/main hub)..hub
 
 - `bun install --filter ./classic --frozen-lockfile`：通过，无 lockfile 变化。
 - Classic `bun run build`：通过。
+- 根模块 `go build ./...`：通过。
 - 新 UI `bun run build`：通过。
 - OpenAI SSE 定向回归测试：通过。
 - 任务轮询同渠道/跨渠道并发定向测试：通过。
