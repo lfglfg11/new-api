@@ -51,9 +51,7 @@ const PageLayout = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { i18n } = useTranslation();
   const location = useLocation();
-  const [authReady, setAuthReady] = useState(
-    () => !localStorage.getItem('user'),
-  );
+  const [authReady, setAuthReady] = useState(false);
 
   const cardProPages = [
     '/console/channel',

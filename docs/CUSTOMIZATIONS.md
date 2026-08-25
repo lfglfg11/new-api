@@ -642,13 +642,13 @@ rateLimit:v2:ip:CT:<client-ip>
 
 #### 背景与生产根因
 
-Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/completions`，没有经过统一 Axios 拦截器。该路由由 `middleware.UserAuth()` 保护，需要 Dashboard Access Token；旧实现只发送 `New-Api-User`，没有发送 `Authorization: Bearer ...`，因此登录后任意模型请求都会返回 `AUTH_UNAUTHORIZED`。同时，Classic 在 Refresh Cookie bootstrap 完成前就挂载 Console 子页面，页面组件会先并发发出一批无 Bearer 请求，再依赖 401 Refresh 重试，造成菜单切换阻塞和认证请求放大。
+Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/completions`，没有经过统一 Axios 拦截器。该路由由 `middleware.UserAuth()` 保护，需要 Dashboard Access Token；旧实现只发送 `New-Api-User`，没有发送 `Authorization: Bearer ...`，因此登录后任意模型请求都会返回 `AUTH_UNAUTHORIZED`。同时，生产日志确认问题并不局限于操练场或钱包：`/api/data/...`、`/api/user/self` 等普通用户及管理员接口会先返回 401，随后 `POST /api/user/auth/refresh` 返回 200，原请求重试后才返回 200。根因是 Classic 统一 Axios 客户端只在请求发出时附加当前内存 Token，不在发送前检查 Token 是否缺失、过期或临近过期；此外，Refresh Cookie bootstrap 完成前 Console 子页面就可能挂载并发请求，造成所有 User/Admin/Root 操作的双往返阻塞、间歇错误和认证请求放大。
 
 钱包页还有一个独立问题：读取 `/api/user/topup/info` 后会自动调用 `POST /api/user/amount` 计算最小充值金额。上游为避免 32 位 quota 溢出，在金额预览和支付路径保留了钱包容量校验；当当前余额已经接近上限时，仅打开钱包页面就会误触发 `top-up quota limit exceeded`。这不是 HTTP 429，也不能通过删除后端容量保护解决。
 
 #### 长期业务不变量
 
-> Classic `/pg/*` 操练场必须使用 Dashboard Access Token，不得读取或泄露用户 `sk-...` API Token；Console 受保护页面必须在认证 bootstrap 完成后再挂载；钱包页面初始化只能读取配置，不得自动触发金额预览、支付创建或钱包容量预校验。
+> Classic `/pg/*` 操练场必须使用 Dashboard Access Token，不得读取或泄露用户 `sk-...` API Token；所有 User/Admin/Root Dashboard 请求必须在发送前取得有效短期 Token，并复用统一单飞 Refresh；Console 受保护页面必须在认证 bootstrap 完成后再挂载；钱包页面初始化只能读取配置，不得自动触发金额预览、支付创建或钱包容量预校验。
 
 必须保留：
 
@@ -657,8 +657,11 @@ Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/complet
 - 操练场发起请求前必须确认 Access Token 仍有有效期；Token 缺失、已过期或临近过期时复用现有单飞 `refreshAuthentication()`，不能新增第二套并发 Refresh。
 - Access Token 仍只保存在运行时内存，不得为了操练场写入 localStorage，也不得自动读取用户创建的 `sk-...` Token。
 - 若无法取得有效 Dashboard Token，操练场应在本地结束加载状态并显示登录已过期，不发送必然失败的 `/pg/*` 请求。
-- 初次打开或刷新 Console 且本地存在用户资料时，必须等待 Refresh Cookie bootstrap 完成后再挂载 Header、Sider 和受保护页面，避免先发出 `/api/user/self`、`/api/user/models`、`/api/user/self/groups` 等无 Bearer 请求。公共首页、登录页和无本地登录资料的跳转不应被该等待状态阻塞。
-- Axios 请求拦截器可以为普通 Dashboard 请求补充运行时 Bearer，但不得覆盖调用方显式提供的 `Authorization`。
+- 初次打开或刷新任何 Console 路由时，无论 localStorage 是否存在用户资料，都必须等待 Refresh Cookie bootstrap 完成后再挂载 Header、Sider 和受保护页面，避免先发出 `/api/user/self`、`/api/user/models`、`/api/user/self/groups` 等无 Bearer 请求。公共首页和登录页不应被该等待状态阻塞。
+- 所有通过统一 Axios `API` 实例发出的登录态 User/Admin/Root 请求，都必须在发送前通过 `getValidAccessToken()` 确认短期 Token 有效；Token 缺失、已过期或临近过期时复用现有单飞 Refresh，并发请求不得各自刷新。
+- 401 后 Refresh 和单次原请求重试只作为服务端提前撤销、状态失步等异常兜底，不能作为正常 Token 续期路径；不得逐页面重复实现 Refresh。
+- Axios 请求拦截器不得覆盖调用方显式提供的 `Authorization`，登录、Refresh 等标记 `skipAuthRefresh` 的请求不得触发主动续期。
+- 绕开 Axios 的原生 `fetch`、SSE 或其他管理员请求也必须在发送前调用 `getValidAccessToken()`，不得直接读取可能已过期的内存 Token。
 - 钱包初始化只读取 `/api/user/topup/info`、订阅和邀请等只读数据；不得自动调用 `/api/user/amount`、支付创建接口或其他会触发充值容量预校验的接口。
 - 用户主动修改充值金额、选择支付方式或准备支付时，金额预览仍可按现有流程调用；真正支付创建和结算必须继续执行 `ValidateTopUpQuotaCapacity` 等后端安全检查。
 - `top-up quota limit exceeded` 是钱包容量保护错误，不得误判为 HTTP/Critical 限流，也不得通过放宽 `common.MaxQuota`、删除 int32 饱和保护或跳过结算校验来消除。
@@ -670,9 +673,11 @@ Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/complet
 - `web/classic/src/hooks/playground/useApiRequest.jsx`
   - 非流式和 SSE 请求统一附加 Dashboard Bearer；无有效认证时本地终止并展示认证错误。
 - `web/classic/src/components/layout/PageLayout.jsx`
-  - 有缓存用户资料时，在 bootstrap 完成前用 Loading 阻止 Console 子树挂载。
+  - 所有 Console 路由在 bootstrap 完成前用 Loading 阻止受保护子树挂载，不依赖 localStorage 是否存在缓存用户。
 - `web/classic/src/helpers/api.js`
-  - 仅在调用方没有显式 Authorization 时补充 Dashboard Bearer。
+  - 统一请求拦截器在登录态请求发送前调用 `getValidAccessToken()`，临近过期时复用单飞 Refresh；不覆盖显式 Authorization，401 Refresh/retry 仅作异常兜底。
+- `web/classic/src/components/table/channels/modals/OllamaModelModal.jsx`
+  - Ollama 模型拉取原生 SSE 管理请求在发送前取得有效 Dashboard Bearer，避免绕开 Axios 后使用过期 Token。
 - `web/classic/src/components/topup/index.jsx`
   - 读取充值配置后只初始化金额状态，不再自动请求 `/api/user/amount`。
 - 后端容量保护继续位于 `model/topup.go`、`controller/topup.go` 及对应回归测试中，本次二开不修改其安全语义。
@@ -680,7 +685,7 @@ Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/complet
 #### 上游同步保留策略
 
 - 上游若重构 `/pg/*`、Dashboard Token 或 Refresh 协议，优先迁移“操练场使用当前 Dashboard 身份、后端生成临时 Playground Token”的业务语义；不能简单保留旧 fetch 代码，也不能改为自动选择用户 API Key。
-- 上游若统一原生请求与 Axios 客户端，可删除局部 header 拼装，但必须确认流式与非流式都能在 Token 过期前完成单飞刷新，且不会把 Dashboard Bearer 错发到 `/v1/*` 用户 API。
+- 上游若统一原生请求与 Axios 客户端，可删除局部 header 拼装，但必须保留统一请求发送前的主动 Token 有效性检查、并发单飞 Refresh 和显式 Authorization 保护；确认流式与非流式都能在 Token 过期前完成刷新，且不会把 Dashboard Bearer 错发到 `/v1/*` 用户 API。
 - 上游若改变 Console 布局或路由结构，认证 readiness 门禁必须覆盖所有会在挂载时请求受保护接口的 Header、Sider 和页面组件。
 - 上游若调整充值预览接口，钱包初次打开仍只能执行只读初始化；容量校验应保留在用户主动预览、支付创建和结算链路。
 - 合并冲突时不得用“删除后端 quota 上限校验”解决页面初始化误报；应移除或延后前端无意触发的写入/预校验请求。
@@ -691,7 +696,10 @@ Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/complet
 - [ ] 流式请求使用同样的认证头，SSE 能持续接收消息并以 `[DONE]` 正常结束。
 - [ ] Access Token 临近过期时，操练场先执行一次单飞 Refresh，再发送模型请求；多个并发请求不会制造 Refresh 风暴。
 - [ ] Refresh Cookie 失效时，操练场不请求 `/pg/chat/completions`，消息区域明确显示需要重新登录。
-- [ ] 硬刷新 `/console/playground`、`/console/token` 和 `/console/topup` 时，认证 bootstrap 完成前不会先出现一批受保护接口 401。
+- [ ] 硬刷新 `/console/playground`、`/console/token`、`/console/channel` 和 `/console/topup` 时，无论 localStorage 是否有 `user`，认证 bootstrap 完成前不会先出现一批受保护接口 401。
+- [ ] Access Token 临近过期时同时进入多个普通或管理员页面，只产生一次 Refresh，User/Admin/Root 请求不会先批量返回 401 再重试。
+- [ ] Refresh Cookie 有效但手工清除 localStorage `user` 后直接打开 `/console/channel`，仍先完成 bootstrap，再发送携带 Bearer 的管理员请求。
+- [ ] Ollama 模型拉取流请求携带由 `getValidAccessToken()` 取得的有效 Dashboard Bearer。
 - [ ] 仅打开钱包页面不会发送 `POST /api/user/amount`，也不会显示 `top-up quota limit exceeded`。
 - [ ] 用户主动选择充值金额或支付方式时仍能获取实付金额；余额接近上限时，支付预览/创建仍由后端容量保护拒绝。
 - [ ] Classic 修改文件定向 Prettier、`bun run build` 与 `git diff --check` 通过。
@@ -837,6 +845,8 @@ bun run build
 - [ ] Refresh 的网络错误、5xx、429 不清除 Classic 登录态。
 - [ ] `AUTH_SESSION_LIMIT`、`AUTH_SESSION_ISSUANCE_LIMIT` 和普通 429 在 Classic 中显示可操作提示且不重复弹 Toast。
 - [ ] Classic Console 在 Refresh Cookie bootstrap 完成前不挂载受保护页面，不产生批量无 Bearer 的 401。
+- [ ] Classic 所有 User/Admin/Root Axios 请求在发送前主动确认 Dashboard Token，有并发时只执行一次 Refresh，不依赖批量 401 后重试续期。
+- [ ] Classic 原生管理员 fetch/SSE 请求也使用同一有效 Token 获取逻辑。
 - [ ] Classic 操练场流式和非流式 `/pg/chat/completions` 都携带有效 Dashboard Bearer，不读取用户 `sk-...` Token。
 
 ### 支付

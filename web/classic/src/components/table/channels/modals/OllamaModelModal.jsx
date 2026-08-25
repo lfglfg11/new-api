@@ -45,7 +45,7 @@ import {
 } from '@douyinfe/semi-icons';
 import {
   API,
-  authHeader,
+  getValidAccessToken,
   getUserIdFromLocalStorage,
   showError,
   showSuccess,
@@ -330,13 +330,16 @@ const OllamaModelModal = ({
       setEventSource(closable);
 
       // 使用 fetch 请求 SSE 流
-      const authHeaders = authHeader();
+      const accessToken = await getValidAccessToken();
+      if (!accessToken) {
+        throw new Error(t('未登录或登录已过期，请重新登录'));
+      }
       const userId = getUserIdFromLocalStorage();
       const fetchHeaders = {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
+        Authorization: `Bearer ${accessToken}`,
         'New-API-User': String(userId),
-        ...authHeaders,
       };
 
       const response = await fetch('/api/channel/ollama/pull/stream', {

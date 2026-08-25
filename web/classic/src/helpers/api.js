@@ -27,6 +27,7 @@ import {
   clearAuthentication,
   getAccessToken,
   getAuthSessionId,
+  getValidAccessToken,
   logoutAuthentication,
   refreshAuthentication,
 } from './auth-session';
@@ -84,8 +85,7 @@ function patchAPIInstance(instance) {
     return reqPromise;
   };
 
-  instance.interceptors.request.use((config) => {
-    const accessToken = getAccessToken();
+  instance.interceptors.request.use(async (config) => {
     const userID = getUserIdFromLocalStorage();
     const hasAuthorizationHeader =
       typeof config.headers?.has === 'function'
@@ -93,6 +93,10 @@ function patchAPIInstance(instance) {
         : Boolean(
             config.headers?.Authorization || config.headers?.authorization,
           );
+    let accessToken = getAccessToken();
+    if (userID && !hasAuthorizationHeader && !config.skipAuthRefresh) {
+      accessToken = await getValidAccessToken();
+    }
     if (accessToken && !hasAuthorizationHeader) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
