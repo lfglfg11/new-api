@@ -78,7 +78,7 @@ const PricingCardView = ({
   setSelectedRowKeys,
   openModelDetail,
   canManageModels = false,
-  openModelCreate,
+  openModelEditor,
 }) => {
   const showSkeleton = useMinimumLoadingTime(loading);
   const startIndex = (currentPage - 1) * pageSize;
@@ -289,7 +289,7 @@ const PricingCardView = ({
                   </div>
 
                   <div className='flex items-center space-x-2 ml-3'>
-                    {canManageModels && openModelCreate && (
+                    {canManageModels && openModelEditor && (
                       <Tooltip content={t('编辑模型')}>
                         <Button
                           size='small'
@@ -299,7 +299,7 @@ const PricingCardView = ({
                           aria-label={t('编辑模型')}
                           onClick={(e) => {
                             e.stopPropagation();
-                            openModelCreate(model.model_name);
+                            openModelEditor(model);
                           }}
                         />
                       </Tooltip>

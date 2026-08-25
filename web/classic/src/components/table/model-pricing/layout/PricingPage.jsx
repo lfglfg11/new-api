@@ -32,13 +32,16 @@ const PricingPage = () => {
   const isMobile = useIsMobile();
   const [showRatio, setShowRatio] = React.useState(false);
   const [viewMode, setViewMode] = React.useState('card');
-  const [quickCreateModel, setQuickCreateModel] = React.useState(null);
+  const [quickEditModel, setQuickEditModel] = React.useState(null);
   const canManageModels = (pricingData.userState?.user?.role || 0) >= 10;
-  const openModelCreate = React.useCallback((modelName) => {
-    setQuickCreateModel({ id: undefined, model_name: modelName });
+  const openModelEditor = React.useCallback((model) => {
+    setQuickEditModel({
+      id: model.model_meta_id || undefined,
+      model_name: model.model_name,
+    });
   }, []);
-  const closeModelCreate = React.useCallback(() => {
-    setQuickCreateModel(null);
+  const closeModelEditor = React.useCallback(() => {
+    setQuickEditModel(null);
   }, []);
   const allProps = {
     ...pricingData,
@@ -47,7 +50,7 @@ const PricingPage = () => {
     viewMode,
     setViewMode,
     canManageModels,
-    openModelCreate,
+    openModelEditor,
   };
 
   return (
@@ -94,9 +97,9 @@ const PricingPage = () => {
       {canManageModels && (
         <EditModelModal
           refresh={pricingData.refresh}
-          editingModel={quickCreateModel || { id: undefined }}
-          visiable={Boolean(quickCreateModel)}
-          handleClose={closeModelCreate}
+          editingModel={quickEditModel || { id: undefined }}
+          visiable={Boolean(quickEditModel)}
+          handleClose={closeModelEditor}
         />
       )}
     </div>

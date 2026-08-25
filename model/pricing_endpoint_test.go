@@ -78,6 +78,57 @@ func pricingEndpointTypesFromPricing(pricings []Pricing) map[string][]constant.E
 	return byModel
 }
 
+func pricingByModel(t *testing.T, pricings []Pricing, modelName string) Pricing {
+	t.Helper()
+	for _, pricing := range pricings {
+		if pricing.ModelName == modelName {
+			return pricing
+		}
+	}
+	require.FailNow(t, "pricing model not found", "model=%s", modelName)
+	return Pricing{}
+}
+
+func TestPricingPublishesExactMetadataSourceID(t *testing.T) {
+	resetPricingEndpointTestTables(t)
+
+	insertPricingEndpointChannel(t, 105, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
+	insertPricingEndpointAbility(t, 105, "gpt-4o")
+	metadata := &Model{
+		ModelName:    "gpt-4o",
+		Description:  "Configured exact metadata",
+		Status:       1,
+		SyncOfficial: 1,
+		NameRule:     NameRuleExact,
+	}
+	require.NoError(t, DB.Create(metadata).Error)
+
+	pricing := pricingByModel(t, GetPricing(), "gpt-4o")
+
+	assert.Equal(t, metadata.Id, pricing.ModelMetaID)
+	assert.Equal(t, metadata.Description, pricing.Description)
+}
+
+func TestPricingPublishesRuleMetadataSourceID(t *testing.T) {
+	resetPricingEndpointTestTables(t)
+
+	insertPricingEndpointChannel(t, 106, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
+	insertPricingEndpointAbility(t, 106, "gpt-4o")
+	metadata := &Model{
+		ModelName:    "gpt-",
+		Description:  "Configured prefix metadata",
+		Status:       1,
+		SyncOfficial: 1,
+		NameRule:     NameRulePrefix,
+	}
+	require.NoError(t, DB.Create(metadata).Error)
+
+	pricing := pricingByModel(t, GetPricing(), "gpt-4o")
+
+	assert.Equal(t, metadata.Id, pricing.ModelMetaID)
+	assert.Equal(t, metadata.Description, pricing.Description)
+}
+
 func TestPricingAdvancedCustomUsesConfiguredEndpointTypes(t *testing.T) {
 	resetPricingEndpointTestTables(t)
 
