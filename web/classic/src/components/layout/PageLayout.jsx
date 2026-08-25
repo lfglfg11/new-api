@@ -24,6 +24,7 @@ import App from '../../App';
 import FooterBar from './Footer';
 import { ToastContainer } from 'react-toastify';
 import ErrorBoundary from '../common/ErrorBoundary';
+import Loading from '../common/ui/Loading';
 import React, { useContext, useEffect, useState } from 'react';
 import { useIsMobile } from '../../hooks/common/useIsMobile';
 import { useSidebarCollapsed } from '../../hooks/common/useSidebarCollapsed';
@@ -50,6 +51,9 @@ const PageLayout = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { i18n } = useTranslation();
   const location = useLocation();
+  const [authReady, setAuthReady] = useState(
+    () => !localStorage.getItem('user'),
+  );
 
   const cardProPages = [
     '/console/channel',
@@ -81,10 +85,15 @@ const PageLayout = () => {
   }, [isMobile, drawerOpen, collapsed, setCollapsed]);
 
   const loadUser = () => {
-    let user = localStorage.getItem('user');
-    if (user) {
-      let data = JSON.parse(user);
-      userDispatch({ type: 'login', payload: data });
+    const user = localStorage.getItem('user');
+    if (!user) {
+      return;
+    }
+    try {
+      userDispatch({ type: 'login', payload: JSON.parse(user) });
+    } catch (error) {
+      localStorage.removeItem('user');
+      console.error('Failed to restore cached user:', error);
     }
   };
 
@@ -105,7 +114,16 @@ const PageLayout = () => {
 
   useEffect(() => {
     loadUser();
-    bootstrapAuthentication(userDispatch).catch(console.error);
+    const initializeAuthentication = async () => {
+      try {
+        await bootstrapAuthentication(userDispatch);
+      } catch (error) {
+        console.error('Failed to bootstrap authentication:', error);
+      } finally {
+        setAuthReady(true);
+      }
+    };
+    initializeAuthentication();
     loadStatus().catch(console.error);
     let systemName = getSystemName();
     if (systemName) {
@@ -146,6 +164,15 @@ const PageLayout = () => {
       }
     }
   }, [i18n, userState?.user?.setting]);
+
+  if (isConsoleRoute && !authReady) {
+    return (
+      <>
+        <Loading size='large' />
+        <ToastContainer />
+      </>
+    );
+  }
 
   return (
     <Layout

@@ -120,6 +120,28 @@ export function getAccessToken() {
   return authState.accessToken;
 }
 
+export async function getValidAccessToken(minValiditySeconds = 30) {
+  const normalizedMinValidity = Math.max(0, Number(minValiditySeconds) || 0);
+  const now = Math.floor(Date.now() / 1000);
+  if (
+    authState.accessToken &&
+    authState.accessExpiresAt > now + normalizedMinValidity
+  ) {
+    return authState.accessToken;
+  }
+
+  const outcome = await refreshAuthentication();
+  if (outcome.kind === 'authenticated') {
+    return outcome.bundle.access_token;
+  }
+
+  const fallbackNow = Math.floor(Date.now() / 1000);
+  if (authState.accessToken && authState.accessExpiresAt > fallbackNow) {
+    return authState.accessToken;
+  }
+  return null;
+}
+
 export function getAuthSessionId() {
   return authState.session?.sid;
 }

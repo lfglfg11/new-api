@@ -715,8 +715,9 @@ const TopUp = () => {
             setPresetAmounts(generatePresetAmounts(minTopUpValue));
           }
 
-          // 初始化显示实付金额
-          getAmount(minTopUpValue);
+          // 只初始化充值配置；用户选择金额或支付方式后再请求实付金额，
+          // 避免打开钱包页面时触发充值容量预校验。
+          setAmount(0);
         } catch (e) {
           console.log('解析支付方式失败:', e);
           setPayMethods([]);

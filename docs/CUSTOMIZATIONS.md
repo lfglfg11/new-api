@@ -638,6 +638,64 @@ rateLimit:v2:ip:CT:<client-ip>
 - [ ] Classic 遇到限流 429 时显示 `Retry-After` 剩余秒数，且同一错误只弹一次 Toast。
 - [ ] `go test ./middleware ./router -count=1`、`go build ./...`、Classic 定向 Prettier 和 `bun run build` 通过。
 
+### 4.14 Classic 操练场鉴权与钱包初始化请求约束
+
+#### 背景与生产根因
+
+Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/completions`，没有经过统一 Axios 拦截器。该路由由 `middleware.UserAuth()` 保护，需要 Dashboard Access Token；旧实现只发送 `New-Api-User`，没有发送 `Authorization: Bearer ...`，因此登录后任意模型请求都会返回 `AUTH_UNAUTHORIZED`。同时，Classic 在 Refresh Cookie bootstrap 完成前就挂载 Console 子页面，页面组件会先并发发出一批无 Bearer 请求，再依赖 401 Refresh 重试，造成菜单切换阻塞和认证请求放大。
+
+钱包页还有一个独立问题：读取 `/api/user/topup/info` 后会自动调用 `POST /api/user/amount` 计算最小充值金额。上游为避免 32 位 quota 溢出，在金额预览和支付路径保留了钱包容量校验；当当前余额已经接近上限时，仅打开钱包页面就会误触发 `top-up quota limit exceeded`。这不是 HTTP 429，也不能通过删除后端容量保护解决。
+
+#### 长期业务不变量
+
+> Classic `/pg/*` 操练场必须使用 Dashboard Access Token，不得读取或泄露用户 `sk-...` API Token；Console 受保护页面必须在认证 bootstrap 完成后再挂载；钱包页面初始化只能读取配置，不得自动触发金额预览、支付创建或钱包容量预校验。
+
+必须保留：
+
+- 操练场继续请求 `/pg/chat/completions`，由后端按当前登录用户和选择分组创建临时 Playground Token；不得为了绕过 Dashboard 鉴权改成 `/v1/chat/completions`。
+- 原生非流式 `fetch` 和流式 `sse.js` 请求必须共用同一组请求头，同时携带 Dashboard `Authorization: Bearer <access token>` 和兼容所需的 `New-Api-User`。
+- 操练场发起请求前必须确认 Access Token 仍有有效期；Token 缺失、已过期或临近过期时复用现有单飞 `refreshAuthentication()`，不能新增第二套并发 Refresh。
+- Access Token 仍只保存在运行时内存，不得为了操练场写入 localStorage，也不得自动读取用户创建的 `sk-...` Token。
+- 若无法取得有效 Dashboard Token，操练场应在本地结束加载状态并显示登录已过期，不发送必然失败的 `/pg/*` 请求。
+- 初次打开或刷新 Console 且本地存在用户资料时，必须等待 Refresh Cookie bootstrap 完成后再挂载 Header、Sider 和受保护页面，避免先发出 `/api/user/self`、`/api/user/models`、`/api/user/self/groups` 等无 Bearer 请求。公共首页、登录页和无本地登录资料的跳转不应被该等待状态阻塞。
+- Axios 请求拦截器可以为普通 Dashboard 请求补充运行时 Bearer，但不得覆盖调用方显式提供的 `Authorization`。
+- 钱包初始化只读取 `/api/user/topup/info`、订阅和邀请等只读数据；不得自动调用 `/api/user/amount`、支付创建接口或其他会触发充值容量预校验的接口。
+- 用户主动修改充值金额、选择支付方式或准备支付时，金额预览仍可按现有流程调用；真正支付创建和结算必须继续执行 `ValidateTopUpQuotaCapacity` 等后端安全检查。
+- `top-up quota limit exceeded` 是钱包容量保护错误，不得误判为 HTTP/Critical 限流，也不得通过放宽 `common.MaxQuota`、删除 int32 饱和保护或跳过结算校验来消除。
+
+#### 当前实现路径
+
+- `web/classic/src/helpers/auth-session.js`
+  - `getValidAccessToken()` 检查运行时 Token 有效期，并复用 Refresh 单飞恢复。
+- `web/classic/src/hooks/playground/useApiRequest.jsx`
+  - 非流式和 SSE 请求统一附加 Dashboard Bearer；无有效认证时本地终止并展示认证错误。
+- `web/classic/src/components/layout/PageLayout.jsx`
+  - 有缓存用户资料时，在 bootstrap 完成前用 Loading 阻止 Console 子树挂载。
+- `web/classic/src/helpers/api.js`
+  - 仅在调用方没有显式 Authorization 时补充 Dashboard Bearer。
+- `web/classic/src/components/topup/index.jsx`
+  - 读取充值配置后只初始化金额状态，不再自动请求 `/api/user/amount`。
+- 后端容量保护继续位于 `model/topup.go`、`controller/topup.go` 及对应回归测试中，本次二开不修改其安全语义。
+
+#### 上游同步保留策略
+
+- 上游若重构 `/pg/*`、Dashboard Token 或 Refresh 协议，优先迁移“操练场使用当前 Dashboard 身份、后端生成临时 Playground Token”的业务语义；不能简单保留旧 fetch 代码，也不能改为自动选择用户 API Key。
+- 上游若统一原生请求与 Axios 客户端，可删除局部 header 拼装，但必须确认流式与非流式都能在 Token 过期前完成单飞刷新，且不会把 Dashboard Bearer 错发到 `/v1/*` 用户 API。
+- 上游若改变 Console 布局或路由结构，认证 readiness 门禁必须覆盖所有会在挂载时请求受保护接口的 Header、Sider 和页面组件。
+- 上游若调整充值预览接口，钱包初次打开仍只能执行只读初始化；容量校验应保留在用户主动预览、支付创建和结算链路。
+- 合并冲突时不得用“删除后端 quota 上限校验”解决页面初始化误报；应移除或延后前端无意触发的写入/预校验请求。
+
+#### 可重复验收
+
+- [ ] 登录 Classic 后进入操练场，非流式请求 `POST /pg/chat/completions` 携带 Dashboard Bearer 和 `New-Api-User`，返回正常模型响应。
+- [ ] 流式请求使用同样的认证头，SSE 能持续接收消息并以 `[DONE]` 正常结束。
+- [ ] Access Token 临近过期时，操练场先执行一次单飞 Refresh，再发送模型请求；多个并发请求不会制造 Refresh 风暴。
+- [ ] Refresh Cookie 失效时，操练场不请求 `/pg/chat/completions`，消息区域明确显示需要重新登录。
+- [ ] 硬刷新 `/console/playground`、`/console/token` 和 `/console/topup` 时，认证 bootstrap 完成前不会先出现一批受保护接口 401。
+- [ ] 仅打开钱包页面不会发送 `POST /api/user/amount`，也不会显示 `top-up quota limit exceeded`。
+- [ ] 用户主动选择充值金额或支付方式时仍能获取实付金额；余额接近上限时，支付预览/创建仍由后端容量保护拒绝。
+- [ ] Classic 修改文件定向 Prettier、`bun run build` 与 `git diff --check` 通过。
+
 ## 5. 条件性构建兼容项（按上游现状判断）
 
 以下内容来自历史合并或构建修复，但不是稳定的独立业务需求。未来同步时不能无脑保留旧实现；只有上游当前结构仍然需要时才继续保留：
@@ -778,6 +836,8 @@ bun run build
 - [ ] Refresh 使用独立默认 `120 次 / 1200 秒`，429 带正确 `Retry-After`。
 - [ ] Refresh 的网络错误、5xx、429 不清除 Classic 登录态。
 - [ ] `AUTH_SESSION_LIMIT`、`AUTH_SESSION_ISSUANCE_LIMIT` 和普通 429 在 Classic 中显示可操作提示且不重复弹 Toast。
+- [ ] Classic Console 在 Refresh Cookie bootstrap 完成前不挂载受保护页面，不产生批量无 Bearer 的 401。
+- [ ] Classic 操练场流式和非流式 `/pg/chat/completions` 都携带有效 Dashboard Bearer，不读取用户 `sk-...` Token。
 
 ### 支付
 
@@ -791,6 +851,7 @@ bun run build
 - [ ] Epay、Stripe、Waffo 等上游支付方式没有因合并而回退。
 - [ ] classic 和 default 都能配置支付宝/微信。
 - [ ] 充值历史正确显示支付来源或方式。
+- [ ] 仅打开 Classic 钱包不自动调用 `/api/user/amount`，用户主动预览或支付时仍保留钱包容量保护。
 
 ### 异步任务
 

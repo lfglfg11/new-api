@@ -87,7 +87,13 @@ function patchAPIInstance(instance) {
   instance.interceptors.request.use((config) => {
     const accessToken = getAccessToken();
     const userID = getUserIdFromLocalStorage();
-    if (accessToken) {
+    const hasAuthorizationHeader =
+      typeof config.headers?.has === 'function'
+        ? config.headers.has('Authorization')
+        : Boolean(
+            config.headers?.Authorization || config.headers?.authorization,
+          );
+    if (accessToken && !hasAuthorizationHeader) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
     if (userID) {

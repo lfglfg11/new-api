@@ -27,6 +27,7 @@ import {
 } from '../../constants/playground.constants';
 import {
   getUserIdFromLocalStorage,
+  getValidAccessToken,
   handleApiError,
   processThinkTags,
   processIncompleteThinkTags,
@@ -173,7 +174,7 @@ export const useApiRequest = (
 
   // 非流式请求
   const handleNonStreamRequest = useCallback(
-    async (payload) => {
+    async (payload, headers) => {
       setDebugData((prev) => ({
         ...prev,
         request: payload,
@@ -187,10 +188,7 @@ export const useApiRequest = (
       try {
         const response = await fetch(API_ENDPOINTS.CHAT_COMPLETIONS, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'New-Api-User': getUserIdFromLocalStorage(),
-          },
+          headers,
           body: JSON.stringify(payload),
         });
 
@@ -200,9 +198,7 @@ export const useApiRequest = (
           try {
             errorBody = await response.text();
             const errorJson = JSON.parse(errorBody);
-            if (errorJson?.error) {
-              parsedError = errorJson.error;
-            }
+            parsedError = errorJson?.error || errorJson;
           } catch (e) {
             if (!errorBody) {
               errorBody = '无法读取错误响应体';
@@ -302,7 +298,7 @@ export const useApiRequest = (
 
   // SSE请求
   const handleSSE = useCallback(
-    (payload) => {
+    (payload, headers) => {
       setDebugData((prev) => ({
         ...prev,
         request: payload,
@@ -314,10 +310,7 @@ export const useApiRequest = (
       setActiveDebugTab(DEBUG_TABS.REQUEST);
 
       const source = new SSE(API_ENDPOINTS.CHAT_COMPLETIONS, {
-        headers: {
-          'Content-Type': 'application/json',
-          'New-Api-User': getUserIdFromLocalStorage(),
-        },
+        headers,
         method: 'POST',
         payload: JSON.stringify(payload),
       });
@@ -400,6 +393,9 @@ export const useApiRequest = (
               if (errorJson?.error) {
                 errorMessage = errorJson.error.message || errorMessage;
                 errorCode = errorJson.error.code || null;
+              } else if (errorJson?.message) {
+                errorMessage = errorJson.message;
+                errorCode = errorJson.code || null;
               }
             } catch (_) {
               // not JSON, use raw data as error message
@@ -421,7 +417,11 @@ export const useApiRequest = (
           setMessage((prevMessage) => {
             const newMessages = [...prevMessage];
             const lastMessage = newMessages[newMessages.length - 1];
-            if (lastMessage && lastMessage.status !== MESSAGE_STATUS.COMPLETE && lastMessage.status !== MESSAGE_STATUS.ERROR) {
+            if (
+              lastMessage &&
+              lastMessage.status !== MESSAGE_STATUS.COMPLETE &&
+              lastMessage.status !== MESSAGE_STATUS.ERROR
+            ) {
               newMessages[newMessages.length - 1] = {
                 ...lastMessage,
                 content: (lastMessage.content || '') + errorMessage,
@@ -536,14 +536,71 @@ export const useApiRequest = (
 
   // 发送请求
   const sendRequest = useCallback(
-    (payload, isStream) => {
+    async (payload, isStream) => {
+      let accessToken = null;
+      try {
+        accessToken = await getValidAccessToken();
+      } catch (error) {
+        console.error('Failed to prepare playground authentication:', error);
+      }
+
+      if (!accessToken) {
+        const errorMessage = t('未登录或登录已过期，请重新登录');
+        const errorInfo = handleApiError(new Error(errorMessage));
+        setDebugData((prev) => ({
+          ...prev,
+          request: payload,
+          timestamp: new Date().toISOString(),
+          response: JSON.stringify(errorInfo, null, 2),
+          sseMessages: isStream ? [] : null,
+          isStreaming: false,
+        }));
+        setActiveDebugTab(DEBUG_TABS.RESPONSE);
+        setMessage((prevMessage) => {
+          const lastMessage = prevMessage[prevMessage.length - 1];
+          if (!lastMessage) {
+            return prevMessage;
+          }
+          if (
+            lastMessage.status !== MESSAGE_STATUS.LOADING &&
+            lastMessage.status !== MESSAGE_STATUS.INCOMPLETE
+          ) {
+            return prevMessage;
+          }
+          return [
+            ...prevMessage.slice(0, -1),
+            {
+              ...lastMessage,
+              content: errorMessage,
+              errorCode: 'AUTH_UNAUTHORIZED',
+              status: MESSAGE_STATUS.ERROR,
+              ...applyAutoCollapseLogic(lastMessage, true),
+            },
+          ];
+        });
+        return;
+      }
+
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'New-Api-User': getUserIdFromLocalStorage(),
+      };
       if (isStream) {
-        handleSSE(payload);
+        handleSSE(payload, headers);
       } else {
-        handleNonStreamRequest(payload);
+        await handleNonStreamRequest(payload, headers);
       }
     },
-    [handleSSE, handleNonStreamRequest],
+    [
+      handleSSE,
+      handleNonStreamRequest,
+      setDebugData,
+      setActiveDebugTab,
+      setMessage,
+      t,
+      applyAutoCollapseLogic,
+    ],
   );
 
   return {
