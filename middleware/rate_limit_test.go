@@ -279,3 +279,81 @@ func TestRedisFailurePolicies(t *testing.T) {
 	assert.Empty(t, userResponse.Body.String())
 	assert.Equal(t, http.StatusNoContent, performRateLimitRequest(router, "/email", "192.0.2.62:12345").Code)
 }
+
+// useCriticalRateLimitSettings pins the critical limit for a test and restores
+// the previous values afterwards.
+func useCriticalRateLimitSettings(t *testing.T, maxRequestNum int, duration int64) {
+	t.Helper()
+
+	previousEnabled := common.CriticalRateLimitEnable
+	previousNum := common.CriticalRateLimitNum
+	previousDuration := common.CriticalRateLimitDuration
+	common.CriticalRateLimitEnable = true
+	common.CriticalRateLimitNum = maxRequestNum
+	common.CriticalRateLimitDuration = duration
+	t.Cleanup(func() {
+		common.CriticalRateLimitEnable = previousEnabled
+		common.CriticalRateLimitNum = previousNum
+		common.CriticalRateLimitDuration = previousDuration
+	})
+}
+
+func newAuthLoginRateLimitRouter() *gin.Engine {
+	router := gin.New()
+	_ = router.SetTrustedProxies(nil)
+	router.GET("/login", AuthLoginRateLimit(), func(c *gin.Context) {
+		if c.Query("outcome") == "rejected" {
+			MarkLoginRejected(c)
+		}
+		c.Status(http.StatusOK)
+	})
+	return router
+}
+
+func TestAuthLoginRateLimitRefundsAcceptedAttempts(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	redisServer, _ := useRateLimitMiniRedis(t)
+	useCriticalRateLimitSettings(t, 2, 43)
+
+	router := newAuthLoginRateLimitRouter()
+	remoteAddr := "192.0.2.70:12345"
+	key := redisIPRateLimitKey("CT:auth-login", "192.0.2.70")
+
+	for attempt := 0; attempt < 5; attempt++ {
+		require.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=accepted", remoteAddr).Code)
+	}
+	assert.False(t, redisServer.Exists(key), "an accepted attempt must refund the slot it reserved")
+
+	assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=rejected", remoteAddr).Code)
+	assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=rejected", remoteAddr).Code)
+	blocked := performRateLimitRequest(router, "/login?outcome=accepted", remoteAddr)
+	assert.Equal(t, http.StatusTooManyRequests, blocked.Code)
+	assert.Equal(t, "43", blocked.Header().Get("Retry-After"))
+
+	redisServer.FastForward(43 * time.Second)
+	assert.False(t, redisServer.Exists(key))
+	assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=accepted", remoteAddr).Code)
+}
+
+func TestAuthLoginRateLimitRefundsAcceptedAttemptsWithoutRedis(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previousRedisEnabled := common.RedisEnabled
+	common.RedisEnabled = false
+	t.Cleanup(func() {
+		common.RedisEnabled = previousRedisEnabled
+	})
+	useCriticalRateLimitSettings(t, 2, 43)
+
+	router := newAuthLoginRateLimitRouter()
+	remoteAddr := "192.0.2.71:12345"
+
+	for attempt := 0; attempt < 5; attempt++ {
+		require.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=accepted", remoteAddr).Code)
+	}
+
+	assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=rejected", remoteAddr).Code)
+	assert.Equal(t, http.StatusOK, performRateLimitRequest(router, "/login?outcome=rejected", remoteAddr).Code)
+	blocked := performRateLimitRequest(router, "/login?outcome=accepted", remoteAddr)
+	assert.Equal(t, http.StatusTooManyRequests, blocked.Code)
+	assert.Equal(t, "43", blocked.Header().Get("Retry-After"))
+}

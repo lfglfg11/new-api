@@ -203,6 +203,95 @@ func AuthRefreshRateLimit() func(c *gin.Context) {
 	)
 }
 
+const authLoginRateLimitMark = "CT:auth-login"
+
+// loginRejectedContextKey carries the handler's verdict for the attempt that
+// AuthLoginRateLimit just admitted.
+const loginRejectedContextKey = "login_rejected"
+
+// redisRateLimitRefundScript returns the slot taken by an admitted attempt that
+// turned out not to be a credential rejection. The counter is deleted instead
+// of decremented to zero so the window does not linger after the last failure.
+const redisRateLimitRefundScript = `
+local count = tonumber(redis.call('GET', KEYS[1]) or '0')
+if count <= 1 then
+  redis.call('DEL', KEYS[1])
+  return 0
+end
+return redis.call('DECR', KEYS[1])
+`
+
+// MarkLoginRejected reports that the current request was answered with a
+// credential rejection (wrong password, wrong 2FA code, failed passkey
+// assertion). Only those attempts accumulate toward CT:auth-login, so a shared
+// address whose other users keep signing in successfully, a pending 2FA
+// challenge, or an infrastructure error can no longer lock a valid user out.
+func MarkLoginRejected(c *gin.Context) {
+	c.Set(loginRejectedContextKey, true)
+}
+
+func loginRejected(c *gin.Context) bool {
+	value, ok := c.Get(loginRejectedContextKey)
+	if !ok {
+		return false
+	}
+	rejected, _ := value.(bool)
+	return rejected
+}
+
+func redisRateLimitRefund(ctx context.Context, key string) {
+	if err := common.RDB.Eval(ctx, redisRateLimitRefundScript, []string{key}).Err(); err != nil {
+		logger.LogError(ctx, fmt.Sprintf("rate limit refund failed (key=%s): %v", key, err))
+	}
+}
+
+// AuthLoginRateLimit keeps the shared CT:auth-login bucket but refunds the slot
+// consumed by any attempt that was not rejected as bad credentials, so only
+// failed sign-ins count toward CRITICAL_RATE_LIMIT. Counting first and
+// refunding afterwards preserves the hard cap for a burst of guessing, which a
+// check-then-record limiter would let through, while routine traffic on the
+// same address (office NAT, mobile carrier, another user of the same client)
+// no longer exhausts the window.
+func AuthLoginRateLimit() func(c *gin.Context) {
+	if !common.CriticalRateLimitEnable {
+		return defNext
+	}
+	maxRequestNum := common.CriticalRateLimitNum
+	duration := common.CriticalRateLimitDuration
+	if common.RedisEnabled {
+		return func(c *gin.Context) {
+			key := redisIPRateLimitKey(authLoginRateLimitMark, c.ClientIP())
+			allowed, _, ttlSeconds, err := redisFixedWindowTake(c.Request.Context(), key, maxRequestNum, duration)
+			if err != nil {
+				logger.LogError(c.Request.Context(), fmt.Sprintf("rate limit check failed (mark=%s): %v", authLoginRateLimitMark, err))
+				c.Status(http.StatusInternalServerError)
+				c.Abort()
+				return
+			}
+			if !allowed {
+				writeRateLimited(c, ttlSeconds)
+				return
+			}
+			c.Next()
+			if !loginRejected(c) {
+				redisRateLimitRefund(c.Request.Context(), key)
+			}
+		}
+	}
+	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+	return func(c *gin.Context) {
+		key := authLoginRateLimitMark + c.ClientIP()
+		if !inMemoryRateLimiter.Request(key, maxRequestNum, duration) {
+			writeRateLimited(c, duration)
+			return
+		}
+		c.Next()
+		if !loginRejected(c) {
+			inMemoryRateLimiter.Refund(key)
+		}
+	}
+}
+
 func UserCriticalRateLimit(scope string) func(c *gin.Context) {
 	if !common.CriticalRateLimitEnable {
 		return defNext

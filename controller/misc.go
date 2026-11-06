@@ -289,7 +289,11 @@ func SendEmailVerification(c *gin.Context) {
 		"<p>验证码 %d 分钟内有效，如果不是本人操作，请忽略。</p>", common.SystemName, code, common.VerificationValidMinutes)
 	err := common.SendEmail(subject, email, content)
 	if err != nil {
-		common.ApiError(c, err)
+		// SMTP replies such as "550 User has no permission" are diagnostics for
+		// the operator, not something an end user can act on, so log the raw
+		// error and answer with a translatable message instead.
+		logger.LogError(c.Request.Context(), fmt.Sprintf("failed to send verification email to %s: %v", email, err))
+		common.ApiErrorI18n(c, i18n.MsgEmailSendFailed)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{

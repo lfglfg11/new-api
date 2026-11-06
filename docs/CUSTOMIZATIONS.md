@@ -597,6 +597,20 @@ rateLimit:v2:ip:CT:<client-ip>
 - `AUTH_SESSION_ISSUANCE_LIMIT` 必须说明近期创建会话过多，需要等待滚动窗口结束。
 - 普通 429 优先读取 `Retry-After` 并显示剩余秒数；不得只显示 Axios 的状态码文本。
 
+#### 登录桶必须“先计数后归还”，只有凭据拒绝才计入
+
+即使把桶拆开，`CT:auth-login` 仍会因为**把成功登录也计入**而误锁合法用户：生产取证显示 `POST /api/user/login` 的 200 既包含成功也包含凭据失败（`Login` 失败同样返回 HTTP 200 + `success:false`），而同一出口 IP 上的撞库/批量校验流量会迅速吃满 `20 次 / 1200 秒`，把该 IP 背后的正常用户连坐锁死（用户看到的就是 `请等待 248 秒后重试`）。
+
+因此登录桶的语义必须是：**先计数（保留对并发突刺的硬上限），请求结束后若未被判定为凭据拒绝就退款**。不要改成“只在失败时记录再判断”，那会让并发突刺整批穿过检查；也不要改成“成功才退款”，因为 2FA 挑战中间态、Passkey begin、`409 AUTH_SESSION_LIMIT`、DB 错误、参数错误都是 200 且不是凭据拒绝，会被误判为失败而继续占额度。
+
+必须保留：
+
+- `middleware.AuthLoginRateLimit()` 是登录类入口的唯一限流中间件（密码、2FA、Passkey begin/finish、微信、Telegram），不得退回 `ScopedCriticalRateLimit("auth-login")`。
+- 只有 `middleware.MarkLoginRejected(c)` 标记的请求计入额度：用户名/密码错误（`controller/user.go` 的 `ValidateAndFill` 默认分支）、2FA TOTP 与备用码双错（`controller/twofa.go`）。
+- Redis 退款用 Lua 保证原子性（`GET` 后 `<=1` 则 `DEL`，否则 `DECR`），内存实现用 `InMemoryRateLimiter.Refund`，两者语义必须一致；退款失败只记日志，不能阻断登录。
+- 新增登录方式时，其“凭据错误”分支必须调用 `MarkLoginRejected`，否则该入口等于无限额度。
+- 明确接受的权衡：有效凭据的批量登录不再被该桶拦截，暴力破解防线改为依赖 `GLOBAL_WEB_RATE_LIMIT`、`GLOBAL_API_RATE_LIMIT` 与账号侧治理。这是“正常用户不被连坐”换来的，不要为了堵撞库把退款逻辑去掉。
+
 #### 当前实现路径
 
 - `common/constants.go`、`common/init.go`
@@ -608,8 +622,14 @@ rateLimit:v2:ip:CT:<client-ip>
   - `CriticalRateLimit()` 保留原 `CT` 行为
   - `ScopedCriticalRateLimit(scope)`
   - `AuthRefreshRateLimit()`
+  - `AuthLoginRateLimit()`、`MarkLoginRejected(c)`、`redisRateLimitRefund()`、`redisRateLimitRefundScript`
+- `common/rate-limit.go`
+  - `InMemoryRateLimiter.Refund(key)`
 - `middleware/rate_limit_test.go`
   - 登录、Refresh、旧 `CT` 三类桶的隔离、阈值与 `Retry-After` 回归测试
+  - `TestAuthLoginRateLimitRefundsAcceptedAttempts`（Redis）与 `TestAuthLoginRateLimitRefundsAcceptedAttemptsWithoutRedis`（内存）覆盖“接受即退款、拒绝才计数”
+- `controller/user.go`、`controller/twofa.go`
+  - 凭据拒绝分支调用 `middleware.MarkLoginRejected(c)`
 - `router/api-router.go`
   - 认证入口的 scope 分配
 - `web/classic/src/helpers/auth-error-message.js`
@@ -629,6 +649,8 @@ rateLimit:v2:ip:CT:<client-ip>
 #### 可重复验收
 
 - [ ] 同一 IP 连续请求登录直至 `auth-login` 返回 429 后，`POST /api/user/auth/refresh` 仍可在其独立额度内成功。
+- [ ] 同一 IP 反复**成功**登录（或反复触发 2FA 挑战、Passkey begin、409 会话上限）不会耗尽 `auth-login`，`rateLimit:v2:ip:CT:auth-login:<IP>` 不残留。
+- [ ] 同一 IP 连续输错密码（或 2FA 双错）达到阈值后仍返回 429 与 `Retry-After`，证明凭据拒绝仍被计数。
 - [ ] 同一 IP 耗尽旧 `CT` 桶（例如未迁移的 Critical 路由）后，登录与 Refresh 独立桶仍不受影响。
 - [ ] 2FA、Passkey、微信、Telegram 与密码登录共同消耗 `auth-login`，不能互相绕过登录保护。
 - [ ] Refresh 默认允许 120 次 / 1200 秒，超限时返回 429 和正确 `Retry-After`；修改两个环境变量后阈值与窗口同步变化。
@@ -703,6 +725,31 @@ Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/complet
 - [ ] 仅打开钱包页面不会发送 `POST /api/user/amount`，也不会显示 `top-up quota limit exceeded`。
 - [ ] 用户主动选择充值金额或支付方式时仍能获取实付金额；余额接近上限时，支付预览/创建仍由后端容量保护拒绝。
 - [ ] Classic 修改文件定向 Prettier、`bun run build` 与 `git diff --check` 通过。
+
+### 4.15 邮件发送失败不得把 SMTP 原始错误透传给终端用户
+
+#### 背景与生产根因
+
+注册页出现 `错误：550 User has no permission`。用 openssl 直连 `smtp.163.com:465` 手工走 `AUTH LOGIN` 可复现：550 出现在提交授权码之后、`MAIL FROM` 之前，属 163 侧对该授权码/出口 IP 的拒绝（授权码失效或发信权限受限），**不是代码逻辑错误**。真正的代码缺陷是 `common.SendEmail` 每个阶段都 `return err`，而 `SendEmailVerification` 直接把该错误交给 `common.ApiError(c, err)`，于是 SMTP 原文连同内部实现细节一起显示给用户。
+
+必须保留：
+
+- `controller/misc.go` 的 `SendEmailVerification` 在 `common.SendEmail` 失败时用 `logger.LogError` 记录原始错误（含收件邮箱），对用户返回 `i18n.MsgEmailSendFailed`（`email.send_failed`）。
+- `i18n/locales/{en,zh-CN,zh-TW}.yaml` 必须同时存在 `email.send_failed`，不能只改代码默认值。
+- 其它邮件路径（密码重置等）同样不得把 SMTP 原文返回前端；管理员需要排障信息时从服务端日志读取。
+- 550/535 这类“账号授权码失效”只能在服务器侧修复（更换有效授权码或改用可发信的账号），代码侧只负责不泄漏与可诊断。
+
+#### 当前实现路径
+
+- `controller/misc.go`：`SendEmailVerification`
+- `i18n/keys.go`：`MsgEmailSendFailed`
+- `i18n/locales/en.yaml`、`zh-CN.yaml`、`zh-TW.yaml`
+
+#### 可重复验收
+
+- [ ] SMTP 凭据错误时 `GET /api/verification` 返回 `success:false` 与友好文案，响应体不含 `550`/`535`/SMTP 主机名等原文。
+- [ ] 服务端日志能查到包含原始 SMTP 错误与收件邮箱的 `LogError` 记录。
+- [ ] SMTP 凭据正常时验证码邮件仍可正常发送。
 
 ## 5. 条件性构建兼容项（按上游现状判断）
 

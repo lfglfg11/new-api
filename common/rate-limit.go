@@ -68,3 +68,19 @@ func (l *InMemoryRateLimiter) Request(key string, maxRequestNum int, duration in
 	}
 	return true
 }
+
+// Refund drops the most recent hit recorded for key. Callers use it when an
+// already admitted request turns out not to count toward the limit, so a
+// refundable request never occupies a slot in the window.
+func (l *InMemoryRateLimiter) Refund(key string) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	queue, ok := l.store[key]
+	if !ok || len(*queue) == 0 {
+		return
+	}
+	*queue = (*queue)[:len(*queue)-1]
+	if len(*queue) == 0 {
+		delete(l.store, key)
+	}
+}
