@@ -28,7 +28,7 @@
 - 同步前的 `main`（= `origin/main` = 上游最新）：`e03439033`（`refactor(aws): remove the unused api_key HTTP request path`，2026-11-06）
 - `git merge-base main hub`：`2d8e50bf3`（上游 2026-08-21 `refactor(web): prevent credential autofill in usage log filters (#6966)`）
 - 本轮吸收的上游区间：`2d8e50bf3..e03439033`，共 433 个提交（2026-08-21 → 2026-11-06）
-- 本轮同步缓冲分支：`hub-merge-upstream`；合并提交的两个父提交分别为 `hub@6693b0f70` 与 `main@e03439033`，最终 merge commit 以实际哈希为准
+- 本轮同步缓冲分支：`hub-merge-upstream`；合并提交 `7c2876ab4`，两个父提交分别为 `hub@80506770b`（含本轮登录限流与邮件错误修复）与 `main@e03439033`；已快进合回 `hub` 并推送 `origin`
 - 上一轮快照（2026-08-24）：`hub@74a6dec3c`、`main@2d8e50bf3`、merge-base `7c28993f6`、59 文件 / 3100 增 / 315 删
 
 上游本轮的重要结构变化（后续同步必须记住）：
