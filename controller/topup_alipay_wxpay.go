@@ -539,6 +539,6 @@ func completeTopup(tradeNo string, payName string) error {
 		return err
 	}
 
-	model.RecordLog(topUp.UserId, model.LogTypeTopup, fmt.Sprintf("使用%s充值成功，充值金额: %v，支付金额：%f", payName, logger.LogQuota(quotaToAdd), topUp.Money))
+	model.RecordLog(topUp.UserId, model.LogTypeTopup, common.NewMessage(fmt.Sprintf("使用%s充值成功，充值金额: %v，支付金额：%f", payName, logger.LogQuota(quotaToAdd), topUp.Money)))
 	return nil
 }

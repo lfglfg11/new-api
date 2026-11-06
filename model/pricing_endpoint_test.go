@@ -78,7 +78,7 @@ func pricingEndpointTypesFromPricing(pricings []Pricing) map[string][]constant.E
 	return byModel
 }
 
-func pricingByModel(t *testing.T, pricings []Pricing, modelName string) Pricing {
+func requirePricingByModel(t *testing.T, pricings []Pricing, modelName string) Pricing {
 	t.Helper()
 	for _, pricing := range pricings {
 		if pricing.ModelName == modelName {
@@ -103,7 +103,7 @@ func TestPricingPublishesExactMetadataSourceID(t *testing.T) {
 	}
 	require.NoError(t, DB.Create(metadata).Error)
 
-	pricing := pricingByModel(t, GetPricing(), "gpt-4o")
+	pricing := requirePricingByModel(t, GetPricing(), "gpt-4o")
 
 	assert.Equal(t, metadata.Id, pricing.ModelMetaID)
 	assert.Equal(t, metadata.Description, pricing.Description)
@@ -123,7 +123,7 @@ func TestPricingPublishesRuleMetadataSourceID(t *testing.T) {
 	}
 	require.NoError(t, DB.Create(metadata).Error)
 
-	pricing := pricingByModel(t, GetPricing(), "gpt-4o")
+	pricing := requirePricingByModel(t, GetPricing(), "gpt-4o")
 
 	assert.Equal(t, metadata.Id, pricing.ModelMetaID)
 	assert.Equal(t, metadata.Description, pricing.Description)

@@ -9,7 +9,6 @@ import (
 	"github.com/QuantumNous/new-api/controller"
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/gin-contrib/gzip"
-	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 )
 
@@ -21,26 +20,39 @@ type ThemeAssets struct {
 	ClassicIndexPage []byte
 }
 
-func SetWebRouter(router *gin.Engine, assets ThemeAssets) {
+func SetWebRouter(router *gin.Engine, assets ThemeAssets, pluginDispatcher gin.HandlerFunc) {
 	defaultFS := common.EmbedFolder(assets.DefaultBuildFS, "web/dist")
 	classicFS := common.EmbedFolder(assets.ClassicBuildFS, "web/classic/dist")
-	themeFS := common.NewThemeAwareFS(defaultFS, classicFS)
+	frontendFS := common.NewThemeAwareFS(defaultFS, classicFS)
+	compress := gzip.Gzip(gzip.DefaultCompression)
 
-	router.Use(gzip.Gzip(gzip.DefaultCompression))
-	router.Use(middleware.GlobalWebRateLimit())
-	router.Use(middleware.Cache())
-	router.Use(static.Serve("/", themeFS))
-	router.NoRoute(func(c *gin.Context) {
-		c.Set(middleware.RouteTagKey, "web")
-		if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
-			controller.RelayNotFound(c)
-			return
-		}
-		c.Header("Cache-Control", "no-cache")
-		if common.GetTheme() == "classic" {
-			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.ClassicIndexPage)
-		} else {
-			c.Data(http.StatusOK, "text/html; charset=utf-8", assets.DefaultIndexPage)
-		}
-	})
+	router.NoRoute(
+		pluginDispatcher,
+		middleware.RouteTag("web"),
+		func(c *gin.Context) {
+			// ServeFrontendFiles sends build files already compressed.
+			if !frontendFS.Exists("/", c.Request.URL.Path) {
+				compress(c)
+			}
+		},
+		middleware.AccessTokenAudit(),
+		middleware.GlobalWebRateLimit(frontendFS),
+		middleware.Cache(),
+		middleware.ServeFrontendFiles(frontendFS),
+		func(c *gin.Context) {
+			if strings.HasPrefix(c.Request.RequestURI, "/v1") || strings.HasPrefix(c.Request.RequestURI, "/api") || strings.HasPrefix(c.Request.RequestURI, "/assets") {
+				controller.RelayNotFound(c)
+				return
+			}
+			c.Header("Cache-Control", "no-cache")
+			// Prefer the selected theme's entry page, but never answer with an
+			// empty body when that theme was built without an index (for example
+			// a binary embedded without the classic dist).
+			page := assets.DefaultIndexPage
+			if common.GetTheme() == "classic" && len(assets.ClassicIndexPage) > 0 {
+				page = assets.ClassicIndexPage
+			}
+			c.Data(http.StatusOK, "text/html; charset=utf-8", page)
+		},
+	)
 }

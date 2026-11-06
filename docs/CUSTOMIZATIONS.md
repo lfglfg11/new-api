@@ -21,15 +21,23 @@
 
 ## 2. 当前基线快照
 
-以下信息是 **2026-08-24** 整理本文时的快照，仅用于定位历史，后续同步后应更新：
+以下信息是 **2026-11-07** 同步后的快照，仅用于定位历史，后续同步后应更新：
 
 - 二开分支：`hub`
-- `hub` 当前提交：`74a6dec3c`（已合入本轮 `hub-merge-upstream`；同步前二开输入为 `9d3be0d9a`）
-- 当时的 `main` / `upstream/main`：`2d8e50bf3`
-- 当时 `git merge-base upstream/main hub`：`7c28993f6`
-- `hub` 最后吸收的上游基线约为 2026-07-12；整理时上游已经前进到 2026-08-24。
-- `hub` 相对合并基线约有 59 个文件发生变化，约 3100 行新增、315 行删除。
-- 本轮同步缓冲分支：`hub-merge-upstream`；先合入 `hub` 提交 `9d3be0d9a`，再合入上游 `main` 提交 `2d8e50bf3`。最终 merge commit 以本轮提交完成后的实际哈希为准。
+- 同步前的 `hub`：`6693b0f70`（`修复Classic全局管理请求鉴权阻塞`，2026-08-25）
+- 同步前的 `main`（= `origin/main` = 上游最新）：`e03439033`（`refactor(aws): remove the unused api_key HTTP request path`，2026-11-06）
+- `git merge-base main hub`：`2d8e50bf3`（上游 2026-08-21 `refactor(web): prevent credential autofill in usage log filters (#6966)`）
+- 本轮吸收的上游区间：`2d8e50bf3..e03439033`，共 433 个提交（2026-08-21 → 2026-11-06）
+- 本轮同步缓冲分支：`hub-merge-upstream`；合并提交的两个父提交分别为 `hub@6693b0f70` 与 `main@e03439033`，最终 merge commit 以实际哈希为准
+- 上一轮快照（2026-08-24）：`hub@74a6dec3c`、`main@2d8e50bf3`、merge-base `7c28993f6`、59 文件 / 3100 增 / 315 删
+
+上游本轮的重要结构变化（后续同步必须记住）：
+
+- 前端目录重构：`web/default/` 已并入 `web/`（单应用），`web/classic/` 保持独立；i18n 变为 `web/src/i18n/locales/{en,zh,zh-TW,fr,ru,ja,vi}.json`（7 语言）。
+- Web 控制台消息改为**英文源文本**（`common.ApiErrorT(c, "English text")`），`common.ApiErrorI18n(c, key)` 仍可用于需要后端本地化的场景（我们继续用它返回 `email.send_failed`）。
+- Dashboard 认证继续走 Auth Bundle + 内存 Access Token + HttpOnly Refresh Cookie；登录新增 `/api/user/login/encryption-key`、`/api/user/login/verify`、`/api/user/login/passkey/begin|finish`，`Verify2FALogin` 变成 `VerifyLogin` 的包装。
+- 限流中间件签名变化：`GlobalWebRateLimit(frontendFS static.ServeFileSystem)`、`ServeFrontendFiles(frontendFS)`、`RouteTag(tag)`、`AccessTokenAudit()`。
+- `relaykit/` 与 `tokenkit/` 是独立 module（`replace` 引用），验证时需 `GOWORK=off go build ./...`。
 
 提交哈希只是排查锚点。若以后 rebase、squash 或重建分支，应以本文描述的业务行为和验收结果为准。
 
@@ -809,6 +817,31 @@ Classic 操练场使用原生 `fetch` 和 `sse.js` 请求 `POST /pg/chat/complet
 - `relay/channel/openai/relay-openai.go`：在上游 `StreamScannerHandler` / `StreamResult` API 上识别 SSE error chunk，写回错误数据、将 HTTP 200 流内错误映射为 400、调用 `sr.Stop` 并向上层返回错误，禁止进入成功 usage/结算链路。
 - `service/task_polling.go`：保留 1000 条批次、ID 游标遍历、跨渠道并行、同渠道逐任务并行，以及每个任务独立 adaptor/RelayInfo；采用上游新的退款/配额语义，不恢复已经被上游移除的旧失败退款对账方法。
 - classic UI：上游删除老 UI 的变更不接受，继续保留 `web/classic`、独立 workspace、双前端 Docker 构建、双 embed 和 theme 路由切换；同步修改 `controller/theme_compat_test.go`，使测试验证 Classic 可选而不是断言 Classic 已移除。
+
+### 6.5 2026-11-07 上游同步冲突决策
+
+本轮 `hub-merge-upstream` 合并 `hub@6693b0f70` 与 `main@e03439033`（433 个上游提交），共 44 个冲突文件，决策如下：
+
+- `Dockerfile`：三阶段结构保留（`builder` 构建 `web/dist`、`builder-classic` 构建 `web/classic/dist`、`builder2` 编译 Go），基础镜像与 PGO 构建行取上游（`golang:1.26.10-alpine`、`go build -pgo=.../default.pgo`）。
+- `go.mod`：保留 `skip2/go-qrcode`、`smartwalle/alipay/v3` 与 `gorilla/{context,securecookie,sessions}`（`main.go` 仍用 `gin-contrib/sessions`）；其余 indirect 依赖取上游。
+- `router/api-router.go`：登录类入口（`/login`、`/login/2fa`、`/login/verify`、`/login/passkey/*`、`/passkey/login/*`、`/oauth/wechat`、`/oauth/telegram/login`）统一 `middleware.AuthLoginRateLimit()`；`/auth/refresh` 用 `AuthRefreshRateLimit()`；logout/register/oauth 各自 scope；上游新增的 `/oauth/email/bind/*` 保持上游中间件组合。
+- `controller/user.go`、`controller/login_verification.go`、`controller/twofa.go`：登录失败判定迁移到上游重构后的入口——`ValidateAndFill` 默认分支与 `VerifyLogin` 的 `service.ErrVerificationFailed` 分支调用 `middleware.MarkLoginRejected(c)`；`Verify2FALogin` 直接委托 `VerifyLogin`。
+- `router/web-router.go`：保留 `ThemeAssets` 双 embed 与 `common.NewThemeAwareFS`，同时吸收上游 `pluginDispatcher`、`RouteTag("web")`、`AccessTokenAudit()`、`GlobalWebRateLimit(frontendFS)`、`ServeFrontendFiles(frontendFS)` 链路；`indexHandler` 仍按 `common.GetTheme()` 返回 classic/default 入口页。
+- `i18n/keys.go` 与三份 yaml：整体取上游（上游已删除大量 web 消息 key），只回插 `MsgEmailSendFailed` / `email.send_failed`。
+- `controller/{channel,option,ratio_sync}.go`：全取本地（status-only PUT 兼容、`GetBodyStorage` 兜底、按次/按秒 billing mode 写入）；`controller/channel.go` 中已被上游删除的 `i18n.MsgInvalidParams` / `MsgAuthInsufficientPrivilege` 改用 `common.ApiErrorT`。
+- `model/log.go`：保留管理员 IP 记录缓存，`RecordTopupLog` 签名与函数体取上游（`*common.Message`）。
+- `model/user.go`：`UpdateUserSetting` 尾部改为 `clearAdminRecordIpLogCache()` + `PublishUserAuthCache(userId)`（上游删除了旧 `updateUserSettingCache`）。
+- `model/pricing.go`：字段集取上游（`BillingPluginVariants` / `BillingUsageSchema` / `BillingUsageExamples`），回插 `ModelMetaID` 与 `TaskBillingUnit`。
+- `setting/billing_setting/tiered_billing.go`、`relay/relay_task.go`、`service/task_billing.go`：保留本地 `per_request` / `per_second` 常量与 `ShouldApplyTaskBillingRatios`，吸收上游三分支结算结构（`TieredBillingSnapshot` 优先、`parsed.Immediate.Status == TaskStatusFailure → 0`），调用点继续用 `TieredBillingSnapshot == nil` 守卫。
+- `service/task_polling.go`：两处冲突全部取本地（ID 游标批量遍历 + gopool 并行 + 每任务独立 adaptor/RelayInfo），只吸收上游测试；`service/task_polling_test.go` 同时保留本地 `TestUpdateVideoTasksPollsAllTasksWithSleepSettingEnabled` 与上游 5 个新测试。
+- `relay/channel/openai/relay-openai.go`：保留 `streamErr` 早退与 `secondLastStreamData`；上游 `StreamResult.Stop(err)` 已能 `MarkFailed`，本地早退作为双保险。
+- `controller/theme_compat_test.go`：继续断言 Classic 可保存且 `/api/status` 发布 classic theme。
+- `controller/topup_alipay_wxpay.go`：`model.RecordLog` 已改为接收 `*common.Message`，充值成功日志改用 `common.NewMessage(...)`。
+- 前端新 UI（`web/src`）：`web/default` → `web/` 迁移后按新结构重新落位；`model-ratio-visual-editor.tsx` 取上游重构（`useModelPricing` + `buildModelRow`）后回插 `taskBillingUnitByModel`、`per-second` 计数与筛选；`model-pricing-sheet.tsx` 保留双固定价 Tab（按次/按秒）并使用上游 `PricingAmountInput`；`web/src/features/model-pricing/pricing.ts` 的 `pricingFromDraft` 必须把 `per-second → per_second`、`per-request → per_request` 写回后端（上游原本只区分 `tiered_expr` 与 `ratio`）；`getDisplayPricingMode` 作为唯一展示判定，串起卡片、表格、Badge、筛选与计数。
+- i18n：`Cost in USD per generated second ...` 统一升级为 `Cost in {{currency}} per generated second ...`，7 个 locale 同步补齐；新增 `Per-second`、`per second` 等按秒键。
+- **访问令牌规则（上游 `router/access_token_scope_test.go` 强制）**：上游要求每条 `/api`、`/pg` 面板路由都在 `middleware/access_token_routes.go` 声明访问令牌规则或进入测试的豁免表。二开新增的公开支付回调（`GET /api/qrcode`、`/api/notify` 全方法、`/api/user/alipay/notify` 全方法、`POST /api/user/wxpay/notify`）属于匿名回调，登记在 `router/access_token_scope_test.go` 的 `accessTokenExemptRoutes`；需登录的 `GET /api/user/qrcode` 在规则表中声明 `wallet:read`。后续再新增 `/api` 路由时必须同步这两处，否则 `go test ./router` 会失败。
+- **轮询必须传完整 `ChannelMeta`**：`service/task_polling.go` 的并行 `updateVideoTasks` 每个任务独立 adaptor 时，`relaycommon.ChannelMeta` 必须填 `ChannelType`、`ChannelId`、`ChannelBaseUrl`、`ChannelSetting`、`HeadersOverride`（与 `updateBatchTasks` 一致）。只填 `ChannelBaseUrl` 会让网关类渠道（NewAPI 上游）丢失 `X-API-Key` 等头覆盖，`TestPollingPassesExecutingChannelTypeToAdaptor` 会直接失败。
+- **入口页回退**：`router/web-router.go` 在 `theme=classic` 但未嵌入 classic dist 时不能返回空 body，必须回退 `DefaultIndexPage`（`ThemeAssets` 双 embed 缺失场景）。
 
 ## 7. 同步前检查清单
 
