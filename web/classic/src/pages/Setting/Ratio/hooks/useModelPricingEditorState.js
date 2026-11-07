@@ -177,7 +177,7 @@ const buildModelState = (name, sourceMaps) => {
         ? 'per-second'
         : billingMode === 'per_request' || hasValue(fixedPrice)
           ? 'per-request'
-          : hasRatioPricing
+          : billingMode === 'ratio' || hasValue(modelRatio)
             ? 'per-token'
             : 'per-request',
     fixedPrice,
@@ -350,6 +350,32 @@ export const buildOptionalFieldToggles = (model) => ({
   audioOutputPrice: hasValue(model.audioOutputPrice),
 });
 
+const copyRawRatios = (model, result) => {
+  if (hasValue(model.rawRatios.modelRatio)) {
+    result.ModelRatio = toNormalizedNumber(model.rawRatios.modelRatio);
+  }
+  if (hasValue(model.rawRatios.completionRatio)) {
+    result.CompletionRatio = toNormalizedNumber(model.rawRatios.completionRatio);
+  }
+  if (hasValue(model.rawRatios.cacheRatio)) {
+    result.CacheRatio = toNormalizedNumber(model.rawRatios.cacheRatio);
+  }
+  if (hasValue(model.rawRatios.createCacheRatio)) {
+    result.CreateCacheRatio = toNormalizedNumber(model.rawRatios.createCacheRatio);
+  }
+  if (hasValue(model.rawRatios.imageRatio)) {
+    result.ImageRatio = toNormalizedNumber(model.rawRatios.imageRatio);
+  }
+  if (hasValue(model.rawRatios.audioRatio)) {
+    result.AudioRatio = toNormalizedNumber(model.rawRatios.audioRatio);
+  }
+  if (hasValue(model.rawRatios.audioCompletionRatio)) {
+    result.AudioCompletionRatio = toNormalizedNumber(
+      model.rawRatios.audioCompletionRatio,
+    );
+  }
+};
+
 const serializeModel = (model, t) => {
   const result = {
     ModelPrice: null,
@@ -368,6 +394,10 @@ const serializeModel = (model, t) => {
   ) {
     if (hasValue(model.fixedPrice)) {
       result.ModelPrice = toNormalizedNumber(model.fixedPrice);
+    } else {
+      // 未填写固定价时保留既有倍率：默认「按次计费」不应把尚未配置价格的
+      // 模型原有倍率从选项 JSON 中抹掉。
+      copyRawRatios(model, result);
     }
     return result;
   }
@@ -401,33 +431,7 @@ const serializeModel = (model, t) => {
       );
     }
 
-    if (hasValue(model.rawRatios.modelRatio)) {
-      result.ModelRatio = toNormalizedNumber(model.rawRatios.modelRatio);
-    }
-    if (hasValue(model.rawRatios.completionRatio)) {
-      result.CompletionRatio = toNormalizedNumber(
-        model.rawRatios.completionRatio,
-      );
-    }
-    if (hasValue(model.rawRatios.cacheRatio)) {
-      result.CacheRatio = toNormalizedNumber(model.rawRatios.cacheRatio);
-    }
-    if (hasValue(model.rawRatios.createCacheRatio)) {
-      result.CreateCacheRatio = toNormalizedNumber(
-        model.rawRatios.createCacheRatio,
-      );
-    }
-    if (hasValue(model.rawRatios.imageRatio)) {
-      result.ImageRatio = toNormalizedNumber(model.rawRatios.imageRatio);
-    }
-    if (hasValue(model.rawRatios.audioRatio)) {
-      result.AudioRatio = toNormalizedNumber(model.rawRatios.audioRatio);
-    }
-    if (hasValue(model.rawRatios.audioCompletionRatio)) {
-      result.AudioCompletionRatio = toNormalizedNumber(
-        model.rawRatios.audioCompletionRatio,
-      );
-    }
+    copyRawRatios(model, result);
     return result;
   }
 
