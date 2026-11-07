@@ -489,10 +489,12 @@ func FetchUpstreamRatios(c *gin.Context) {
 				case billing_setting.BillingModePerRequest, billing_setting.BillingModePerSecond:
 					billingModeMap[item.ModelName] = item.BillingMode
 				case billing_setting.BillingModeTieredExpr:
-					if strings.TrimSpace(item.BillingExpr) != "" {
-						billingModeMap[item.ModelName] = billing_setting.BillingModeTieredExpr
-						billingExprMap[item.ModelName] = item.BillingExpr
-					}
+					// Expression models carry no legacy ratio, so the rest of the
+					// item is skipped even when its expression is unusable; the
+					// diff drops empty expressions instead of importing a zero price.
+					billingModeMap[item.ModelName] = billing_setting.BillingModeTieredExpr
+					billingExprMap[item.ModelName] = item.BillingExpr
+					continue
 				}
 				if item.QuotaType == 1 {
 					if item.ModelPrice != nil {

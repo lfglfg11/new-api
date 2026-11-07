@@ -535,7 +535,10 @@ func validateModelPricing(name string, values, previous PricingValues) error {
 			return fmt.Errorf("unsupported pricing field: %s", key)
 		}
 		if key == "billing_setting.billing_mode" {
-			if value != "ratio" && value != "tiered_expr" {
+			switch value {
+			case billing_setting.BillingModeRatio, billing_setting.BillingModeTieredExpr,
+				billing_setting.BillingModePerRequest, billing_setting.BillingModePerSecond:
+			default:
 				return errors.New("invalid billing mode")
 			}
 			continue

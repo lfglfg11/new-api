@@ -384,6 +384,8 @@ git merge main
 - Classic 模型定价编辑器打开时的默认计费方式为“按次计费”（`web/classic/src/pages/Setting/Ratio/hooks/useModelPricingEditorState.js`：`buildModelState` 在无显式 `billing_mode`、无 `ModelPrice`、无基础 `ModelRatio` 时返回 `per-request`，只有扩展倍率的未配置模型同样默认按次；`EMPTY_MODEL` 默认值同为 `per-request`）。上游同步后不得回退为默认“按量计费”。两条硬约束：① `handleSubmit` 只在 `hasValue(model.fixedPrice)` 时写入 `per_request`/`per_second`，防止“默认按次”把未填价模型写成无 `ModelPrice` 的 `per_request`；② `serializeModel` 在按次/按秒但未填固定价时用 `copyRawRatios` 回退复制 `rawRatios`，防止保存时抹掉这类模型既有的扩展倍率。已配置基础倍率的模型仍按“按量计费”回显，不得被默认值改写。
 - 上游删除或重构 Classic 时，不能只保留新 UI 的按秒实现；Classic 的设置入口、价格单位、Badge、筛选和数量统计属于同一业务能力，必须一起恢复。
 - 上游价格同步 `/api/pricing` 必须能够导入 `per_request`、`per_second` 和有效的 `tiered_expr`，避免同步后丢失计费单位。
+- 写库校验必须接受全部四种计费模式：`model/model_pricing_config.go` 的 `validateModelPricing` 对 `billing_setting.billing_mode` 的白名单必须包含 `ratio`、`per_request`、`per_second`、`tiered_expr`（用 `billing_setting.BillingMode*` 常量，不写裸字符串）。上游 2026-11 的版本只允许 `ratio`/`tiered_expr`，会把整表提交的按次/按秒模型判为 `invalid billing mode`，导致“保存模型定价”整体失败；`model/model_pricing_billing_mode_test.go` 守护该契约（UI 值 `per-token` 仍必须被拒）。
+- `controller/ratio_sync.go` 处理上游价格同步条目时，`tiered_expr` 分支必须在写入 `billing_mode`/`billing_expr` 后 `continue`（即使表达式为空），否则该模型会继续落到 ratio 分支，把同步结果污染成 `model_ratio: 0`；`per_request`/`per_second` 分支不得 `continue`，它们的固定价还要走 `ModelPrice` 分支。
 
 #### 关键后端文件和符号
 
