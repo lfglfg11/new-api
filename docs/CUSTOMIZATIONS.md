@@ -381,6 +381,7 @@ git merge main
   - 按次与按秒独立筛选、独立数量统计。
   - 计费标签必须有清晰的视觉区分：Classic 中按次使用青绿色 `teal`，按秒使用醒目的亮橙色 `orange`；上游同步时不得恢复为视觉相近的 `teal` / `cyan`。
 - default 与 Classic 两套系统设置中的模型定价可视化编辑器，都必须提供“按量计费、按次计费、按秒计费、表达式/阶梯计费”四种模式；保存固定价时把显式单位写入 `billing_setting.billing_mode`，重新打开时正确回显。
+- Classic 模型定价编辑器打开时的默认计费方式为“按次计费”（`web/classic/src/pages/Setting/Ratio/hooks/useModelPricingEditorState.js`：`buildModelState` 在既无显式 `billing_mode`/`ModelPrice`、也无任何倍率时返回 `per-request`，`EMPTY_MODEL` 默认值同为 `per-request`）。上游同步后不得回退为默认“按量计费”。硬约束：`handleSubmit` 只在 `hasValue(model.fixedPrice)` 时写入 `per_request`/`per_second`，防止“默认按次”把未填价模型写成无 `ModelPrice` 的 `per_request`；已配置倍率的模型仍按“按量计费”回显，不得被默认值改写。
 - 上游删除或重构 Classic 时，不能只保留新 UI 的按秒实现；Classic 的设置入口、价格单位、Badge、筛选和数量统计属于同一业务能力，必须一起恢复。
 - 上游价格同步 `/api/pricing` 必须能够导入 `per_request`、`per_second` 和有效的 `tiered_expr`，避免同步后丢失计费单位。
 

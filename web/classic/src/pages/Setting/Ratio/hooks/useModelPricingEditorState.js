@@ -29,7 +29,8 @@ const EMPTY_CANDIDATE_MODEL_NAMES = [];
 
 const EMPTY_MODEL = {
   name: '',
-  billingMode: 'per-token',
+  // 新建模型默认按次计费（hub 二开：默认标签由「按量计费」改为「按次计费」）
+  billingMode: 'per-request',
   fixedPrice: '',
   inputPrice: '',
   completionPrice: '',
@@ -158,6 +159,16 @@ const buildModelState = (name, sourceMaps) => {
       ? formatNumber(inputPriceNumber * Number(audioRatio))
       : '';
 
+  const hasRatioPricing = [
+    modelRatio,
+    completionRatio,
+    cacheRatio,
+    createCacheRatio,
+    imageRatio,
+    audioRatio,
+    audioCompletionRatio,
+  ].some(hasValue);
+
   return {
     ...EMPTY_MODEL,
     name,
@@ -166,7 +177,9 @@ const buildModelState = (name, sourceMaps) => {
         ? 'per-second'
         : billingMode === 'per_request' || hasValue(fixedPrice)
           ? 'per-request'
-          : 'per-token',
+          : hasRatioPricing
+            ? 'per-token'
+            : 'per-request',
     fixedPrice,
     inputPrice,
     completionRatioLocked: completionRatioMeta.locked,
@@ -214,17 +227,7 @@ const buildModelState = (name, sourceMaps) => {
       audioRatio,
       audioCompletionRatio,
     },
-    hasConflict:
-      hasValue(fixedPrice) &&
-      [
-        modelRatio,
-        completionRatio,
-        cacheRatio,
-        createCacheRatio,
-        imageRatio,
-        audioRatio,
-        audioCompletionRatio,
-      ].some(hasValue),
+    hasConflict: hasValue(fixedPrice) && hasRatioPricing,
   };
 };
 
@@ -1079,10 +1082,18 @@ export function useModelPricingEditorState({
             billingOutput['billing_setting.billing_expr'][model.name] =
               finalBillingExpr;
           }
-        } else if (model.billingMode === 'per-second') {
+        } else if (
+          model.billingMode === 'per-second' &&
+          hasValue(model.fixedPrice)
+        ) {
           billingOutput['billing_setting.billing_mode'][model.name] =
             'per_second';
-        } else if (model.billingMode === 'per-request') {
+        } else if (
+          model.billingMode === 'per-request' &&
+          hasValue(model.fixedPrice)
+        ) {
+          // 只在已填写按次价格时落库，避免「默认按次」把尚未配置价格的模型
+          // 误写成 per_request（无 ModelPrice 的 per_request 会改变结算口径）。
           billingOutput['billing_setting.billing_mode'][model.name] =
             'per_request';
         }
